@@ -1,0 +1,51 @@
+version: "3.9"
+
+services:
+  pd_web:
+    build:
+      dockerfile: Dockerfile
+    image: pd_web:latest
+    restart: always
+    container_name: pd_web
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/app/models
+      - ./routers:/app/routers
+      - ./recordings:/app/recordings
+    networks:
+      pd_web_net:
+        aliases:
+          - pd_web
+    depends_on:
+      - pd-minio
+    environment:  
+      - MINIO_ENDPOINT=pd-minio:9000
+      - MINIO_ACCESS_KEY=admin
+      - MINIO_SECRET_KEY=123admin123
+
+  pd-minio:
+    container_name: pd-minio
+    image: minio/minio:latest
+    restart: always
+    ports:
+      - "9000:9000"  
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      pd_web_net:
+        aliases:
+          - pd-minio
+    command: server /data --address ":9000" --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=123admin123
+      - MINIO_DOMAIN=pd-minio
+
+volumes:
+  minio_data:
+
+networks:
+  pd_web_net:
+    driver: bridge

@@ -1,0 +1,10 @@
+fastapi
+jinja2
+mediapipe
+numpy<2
+opencv-python==4.9.0.80
+uvicorn[standard]
+aiofiles
+minio==7.2.15
+python-multipart
+requests
