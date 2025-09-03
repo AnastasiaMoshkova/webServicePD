@@ -1,0 +1,22 @@
+<!-- {% extends 'base.html' %}
+
+{% block title %}Главная страница{% endblock %}
+{% block content %}Наполнение{% endblock %} -->
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Streaming</title>
+</head>
+
+<body>
+    <div class="container">
+        <h3>Live Streaming</h3>
+        <img src="{{ url_for('video_feed') }}" width="50%"> <!-- Источник видеопотока -->
+    </div>
+</body>
+
+</html>

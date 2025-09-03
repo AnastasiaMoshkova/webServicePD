@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Processing Recordings</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .recording-card {
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 10px;
+        }
+        .recording-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .recording-card.active {
+            border-left: 4px solid #0d6efd;
+            background-color: #f8f9fa;
+        }
+        .plot-container {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .plot-img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        .exercise-title {
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+        .points-badge {
+            font-size: 0.9rem;
+            margin-left: 10px;
+        }
+        .processing-time {
+            font-size: 0.85rem;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+        .recording-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .download-btn {
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-4">
+        <h1 class="mb-4">Process Recordings</h1>
+
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                        <span>Available Recordings</span>
+                        <button class="btn btn-sm btn-light" onclick="refreshRecordings()">
+                            <i class="bi bi-arrow-clockwise"></i> Refresh
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div id="recordings-list">
+                            {% for recording in recordings %}
+                            <div class="card recording-card" id="recording-{{ loop.index }}"
+                                 onclick="processRecording('{{ recording.path }}', this)">
+                                <div class="card-body">
+                                    <h5 class="card-title">{{ recording.name }}</h5>
+                                    <p class="card-text">
+                                        <small class="text-muted">
+                                            {{ recording.created }} | {{ recording.size }}
+                                        </small>
+                                    </p>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        Processing Results
+                    </div>
+                    <div class="card-body">
+                        <div id="loading" class="loading">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p>Processing recording...</p>
+                        </div>
+                        <div id="results-container">
+                            <div class="alert alert-info">
+                                Select a recording to view analysis results
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentActiveCard = null;
+
+        function processRecording(filePath, cardElement) {
+            // Update active card styling
+            if (currentActiveCard) {
+                currentActiveCard.classList.remove('active');
+            }
+            currentActiveCard = cardElement;
+            currentActiveCard.classList.add('active');
+
+            // Show loading state
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results-container').innerHTML = '';
+
+            fetch('/processing/process', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ file_path: filePath })
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('loading').style.display = 'none';
+
+                if (data.status === 'success') {
+                    showResults(data.result);
+                } else {
+                    showError(data.message || 'Unknown error occurred');
+                }
+            })
+            .catch(error => {
+                document.getElementById('loading').style.display = 'none';
+                showError('Failed to process recording');
+                console.error('Error:', error);
+            });
+        }
+
+        function showResults(result) {
+            const container = document.getElementById('results-container');
+
+            if (!result.results || result.results.length === 0) {
+                container.innerHTML = `
+                    <div class="alert alert-warning">
+                        No valid exercise data found in ${result.recording}
+                    </div>
+                `;
+                return;
+            }
+
+            let html = `
+                <div class="recording-header mb-3">
+                    <h4>${result.recording}</h4>
+                    <div>
+                        <a href="/processing/download?file=${encodeURIComponent(result.recording)}"
+                           class="btn btn-sm btn-outline-primary download-btn">
+                            Download Data
+                        </a>
+                    </div>
+                </div>
+                ${result.processing_time ?
+                    `<div class="processing-time mb-3">
+                        Processing time: ${result.processing_time.toFixed(2)} seconds
+                    </div>` : ''}
+                <div class="row mt-2">
+            `;
+
+            result.results.forEach(exercise => {
+                html += `
+                    <div class="col-md-12 mb-4">
+                        <div class="plot-container">
+                            <h5 class="exercise-title">
+                                ${exercise.exercise_name}
+                                <span class="badge bg-primary points-badge">Max: ${exercise.max_points}</span>
+                                <span class="badge bg-info text-dark points-badge">Min: ${exercise.min_points}</span>
+                            </h5>
+                            <img src="${exercise.plot_url}" class="plot-img"
+                                 alt="${exercise.exercise_name} analysis">
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += `</div>`;
+            container.innerHTML = html;
+        }
+
+        function showError(message) {
+            const container = document.getElementById('results-container');
+            container.innerHTML = `
+                <div class="alert alert-danger">
+                    ${message}
+                </div>
+            `;
+        }
+
+        function refreshRecordings() {
+            window.location.reload();
+        }
+    </script>
+</body>
+</html>
