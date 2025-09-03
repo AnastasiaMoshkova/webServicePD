@@ -1,0 +1,15 @@
+__pycache__
+.ipynb_checkpoints
+drafts
+logs
+poker_services
+README.md
+.env
+*.ipynb
+Notebook
+docker-compose.yaml
+.gitignore
+configs
+.git
+video
+test_video
