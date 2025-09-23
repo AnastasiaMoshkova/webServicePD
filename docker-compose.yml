@@ -10,9 +10,9 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./models:/app/models
+      - ./configs:/app/configs
       - ./routers:/app/routers
-      - ./recordings:/app/recordings
+      - ./static:/app/static
     networks:
       pd_web_net:
         aliases:
