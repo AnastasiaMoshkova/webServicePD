@@ -52,3 +52,6 @@ def get_minio_client():
 
 # Инициализация клиента при импорте модуля
 minio_client = get_minio_client()
+
+if not minio_client.bucket_exists(BUCKET_NAME):
+    minio_client.make_bucket(BUCKET_NAME)
