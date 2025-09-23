@@ -2,68 +2,26 @@
 <html lang="ru">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Проект по Болезни Паркинсона</title>
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-        }
-
-        .container {
-            text-align: center;
-        }
-
-        h1 {
-            color: #2c3e50;
-            margin-bottom: 40px;
-            font-size: 32px;
-        }
-
-        nav {
-            display: flex;
-            gap: 15px;
-            justify-content: center;
-        }
-
-        nav a {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-decoration: none;
-            background-color: #2c3e50;
-            color: white;
-            width: 150px;
-            /* фиксированная ширина */
-            height: 50px;
-            /* фиксированная высота */
-            border-radius: 8px;
-            transition: all 0.3s;
-            font-size: 16px;
-        }
-
-        nav a:hover {
-            background-color: #3498db;
-        }
-    </style>
+    <meta charset="UTF-8" />
+    <title>{% block title %}Моя система{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/styles.css') }}">
 </head>
 
 <body>
     <div class="container">
-        <h1>Проект по Болезни Паркинсона</h1>
         <nav>
-            <a href="/hand_tracking">Запись видео</a>
-            <a href="/files_processing">Обработка записей</a>
+            <a href="/hand_tracking" class="{% if request.url.path == '/hand_tracking' %}active{% endif %}">Двигательная
+                активность рук</a>
+            <a href="/tremor" class="{% if request.url.path == '/tremor' %}active{% endif %}">Тремор</a>
+            <a href="/mimic" class="{% if request.url.path == '/mimic' %}active{% endif %}">Мимика</a>
+            <a href="/voice" class="{% if request.url.path == '/voice' %}active{% endif %}">Голос</a>
+            <a href="/gait" class="{% if request.url.path == '/gait' %}active{% endif %}">Походка</a>
         </nav>
+
+        {% block content %}{% endblock %}
     </div>
+
+    {% block scripts %}{% endblock %}
 </body>
 
 </html>
