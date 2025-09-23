@@ -1,0 +1,70 @@
+NumA:
+  _target_: hand_processing.feature.NumA
+  config:
+    stop: 17 #1700
+AvgFrq:
+  _target_: hand_processing.feature.AvgFrq
+  config:
+    k: 100
+VarFrq:
+  _target_: hand_processing.feature.VarFrq
+  config:
+    k: 100
+AvgVopen:
+  _target_: hand_processing.feature.AvgVopen
+  config:
+AvgVclose:
+  _target_: hand_processing.feature.AvgVclose
+  config:
+AvgA:
+  _target_: hand_processing.feature.AvgA
+  config:
+VarA:
+  _target_: hand_processing.feature.VarA
+  config:
+    k: 100
+VarVopen:
+  _target_: hand_processing.feature.VarVopen
+  config:
+    k: 100
+VarVclose:
+  _target_: hand_processing.feature.VarVclose
+  config:
+    k: 100
+DecA:
+  _target_: hand_processing.feature.DecA
+  config:
+    start: 1 #100
+DecV:
+  _target_: hand_processing.feature.DecV
+  config:
+    start: 1 #100
+DecFA:
+  _target_: hand_processing.feature.DecFA
+  config:
+DecFV:
+  _target_: hand_processing.feature.DecFV
+  config:
+Length:
+  _target_: hand_processing.feature.Length
+  config:
+AvgFrqF:
+  _target_: hand_processing.feature.AvgFrqF
+  config:
+    k: 100
+VarFrqF:
+  _target_: hand_processing.feature.VarFrqF
+  config:
+    k: 100
+DecValueA:
+  _target_: hand_processing.feature.DecValueA
+  config:
+DecValueV:
+  _target_: hand_processing.feature.DecValueV
+  config:
+NumAF:
+  _target_: hand_processing.feature.NumAF
+  config:
+DecLin:
+  _target_: hand_processing.feature.DecLin
+  config:
