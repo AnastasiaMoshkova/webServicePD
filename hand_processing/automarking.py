@@ -124,6 +124,7 @@ class AutoMarking:
         values, frames, palm_width = signal_class.signal_hand(
             input_file, exercise_dict[exercise], hand
         )  # FIXME
+        logger.info(f"==================={values}, {frames}")
         if len(values) > 50:  # FIXME config
             maxP, minP, maxA, minA, frac, order_min, order_max = self.auto_point_hand(
                 values, frames, fps
@@ -163,6 +164,5 @@ class AutoMarking:
                 frames,
             )
 
-    def processing(self, path_to_dir, exercise, fps):
-        hand = "L"
+    def processing(self, path_to_dir, exercise, fps, hand):
         return self.hand_processing_auto_point(path_to_dir, hand, exercise, fps)
