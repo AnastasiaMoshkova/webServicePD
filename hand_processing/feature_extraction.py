@@ -36,7 +36,7 @@ class FE:
         self.FEATURE_NORMS = {
             "NumA": 40,
             "AvgFrq": 4,
-            "VarFrq": 2,
+            "VarFrq": 35,
             "AvgVopen": 2,
             "AvgVclose": 2,
             "AvgA": 50,
