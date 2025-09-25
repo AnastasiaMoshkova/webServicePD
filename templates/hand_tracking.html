@@ -43,6 +43,14 @@
                         <option value="PS">Пронация/супинация кисти</option>
                     </select>
                 </div>
+                <div>
+                    <label for="hand">Рука:</label>
+                    <select id="hand" name="hand">
+                        <option value="">Выберите руку</option>
+                        <option value="R">Правая рука</option>
+                        <option value="L">Левая рука</option>
+                    </select>
+                </div>
             </div>
         </div>
     </div>
@@ -97,5 +105,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', path='js/hand_tracking.js') }}"></script>
+<script src="/static/js/hand_tracking.js"></script>
 {% endblock %}
