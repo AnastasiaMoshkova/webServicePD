@@ -2,7 +2,12 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from routers import tremor, hand_tracking, mimic, gait, voice
+from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 
+app = FastAPI()
+
+# Перенаправление всех HTTP запросов на HTTPS
+app.add_middleware(HTTPSRedirectMiddleware)
 app = FastAPI(limit_max_body_size=3 * 1024 * 1024 * 1024)  # 1 ГБ
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
