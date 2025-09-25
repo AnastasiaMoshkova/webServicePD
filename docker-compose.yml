@@ -14,7 +14,7 @@ services:
       - ./routers:/app/routers
       - ./static:/app/static
     networks:
-      pd_web_net:
+      webservicepd_pd_web_net:
         aliases:
           - pd_web
     depends_on:
@@ -34,7 +34,7 @@ services:
     volumes:
       - minio_data:/data
     networks:
-      pd_web_net:
+      webservicepd_pd_web_net:
         aliases:
           - pd-minio
     command: server /data --address ":9000" --console-address ":9001"
@@ -47,5 +47,5 @@ volumes:
   minio_data:
 
 networks:
-  pd_web_net:
+  webservicepd_pd_web_net:
     driver: bridge

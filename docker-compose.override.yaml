@@ -1,0 +1,31 @@
+services:
+  nginx:
+    image: nginx:latest
+    container_name: pd_nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/certbot/www:/var/www/certbot
+      - ./nginx/certbot/conf:/etc/letsencrypt
+      - ./static:/app/static:ro
+    depends_on:
+      - pd_web
+    networks:
+      - webservicepd_pd_web_net
+
+  certbot:
+    image: certbot/certbot
+    container_name: pd_certbot
+    volumes:
+      - ./nginx/certbot/www:/var/www/certbot
+      - ./nginx/certbot/conf:/etc/letsencrypt
+    networks:
+      - webservicepd_pd_web_net
+
+networks:
+  webservicepd_pd_web_net:
+    external: true
+    

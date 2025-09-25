@@ -39,6 +39,7 @@ class RawDataRequest(BaseModel):
     patientId: str
     exercise: str
     confidence: float
+    hand: str
 
 
 def get_fe_config() -> Dict:
@@ -68,6 +69,9 @@ def home(request: Request):
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    shutil.rmtree(local_dir, ignore_errors=True)
+    if not os.path.isdir(local_dir):
+        os.mkdir(local_dir)
     global recording, out, output_file
     await websocket.accept()
     print("✅ WebSocket подключен")
@@ -75,16 +79,15 @@ async def websocket_endpoint(websocket: WebSocket):
 
     try:
         while True:
-            data = await websocket.receive_text()
-            if not data or len(data) == 0:
-                print("Получена пустая строка")
+            message = await websocket.receive()
+            if message["type"] == "websocket.disconnect":
+                break
+
+            data = message.get("bytes")
+            if not data:
                 continue
-            try:
-                img_bytes = base64.b64decode(data, validate=True)
-            except Exception as e:
-                print(f"Ошибка декодирования base64: {e}")
-                continue
-            np_arr = np.frombuffer(img_bytes, np.uint8)
+
+            np_arr = np.frombuffer(data, np.uint8)
             if np_arr.size == 0:
                 print("Пустой numpy массив")
                 continue
@@ -94,7 +97,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 continue
 
             # Обработка через MediaPipe
-            frame = detector.findHands(frame_orig)
+            frame = detector.findHands(frame_orig.copy())
             lmList = detector.findPosition(frame_orig, draw=True)
 
             # Пример: расстояние между указательным и большим пальцами
@@ -112,15 +115,19 @@ async def websocket_endpoint(websocket: WebSocket):
                     2,
                 )
 
-            if recording and out is not None:
+            if recording:
+                if out is None:
+                    # Создаём writer динамически по размеру кадра
+                    hCam, wCam = frame_orig.shape[:2]
+                    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+                    out = cv2.VideoWriter(output_file, fourcc, 20.0, (wCam, hCam))
                 out.write(frame_orig)
 
-            success, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+            success, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 45])
             if not success:
                 continue
 
-            jpg_as_text = "data:image/jpeg;base64," + base64.b64encode(buffer).decode("utf-8")
-            await websocket.send_text(jpg_as_text)
+            await websocket.send_bytes(buffer.tobytes())
 
     except WebSocketDisconnect:
         print("Клиент отключился")
@@ -137,13 +144,17 @@ async def websocket_endpoint(websocket: WebSocket):
 async def start_record():
     """Запуск записи"""
     global recording, out, output_file
+
     if recording:
         return JSONResponse({"status": "already recording"})
+    else:
+        shutil.rmtree(local_dir, ignore_errors=True)
+        if not os.path.isdir(local_dir):
+            os.mkdir(local_dir)
 
     output_file = os.path.join(local_dir, "test_video.mp4")
-    fourcc = cv2.VideoWriter_fourcc(*"XVID")
-    out = cv2.VideoWriter(output_file, fourcc, 20.0, (wCam, hCam))
     recording = True
+    out = None
     return JSONResponse({"status": "started"})
 
 
@@ -203,14 +214,14 @@ async def upload(
             f.write(content)
         print(f"Saved locally: {local_path}")
 
-        minio_client.put_object(
-            BUCKET_NAME,
-            rel_path,
-            io.BytesIO(content),
-            length=len(content),
-            content_type=file.content_type or "application/octet-stream",
-        )
-        print(f"Successfully uploaded: {rel_path}")
+        # minio_client.put_object(
+        #     BUCKET_NAME,
+        #     rel_path,
+        #     io.BytesIO(content),
+        #     length=len(content),
+        #     content_type=file.content_type or "application/octet-stream",
+        # )
+        # print(f"Successfully uploaded: {rel_path}")
 
         return {
             "status": "success",
@@ -231,12 +242,13 @@ async def raw_data_processing(experiment_info: RawDataRequest):
     patient_id = experiment_info.patientId
     exercise = experiment_info.exercise
     confidence = experiment_info.confidence
+    hand = experiment_info.hand
     logger.info(
         f"Получены данные: patientId={patient_id}, exercise={exercise}, confidence={confidence}"
     )
     # download_folder(BUCKET_NAME, patient_folder, local_dir)
     fps = hand_data_processing.processing(local_dir)
-    maxP, minP, maxA, minA, values, frames = automarker.processing(local_dir, exercise, fps)
+    maxP, minP, maxA, minA, values, frames = automarker.processing(local_dir, exercise, fps, hand)
     features, features_norm = feature_extraction.processing(
         os.path.join(local_dir, "auto_algoritm_MP"), exercise
     )

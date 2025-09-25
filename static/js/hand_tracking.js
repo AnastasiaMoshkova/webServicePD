@@ -179,12 +179,12 @@ function stopCamera() {
 function connectWebSocket() {
     const protocol = window.location.protocol === "https:" ? "wss://" : "ws://";
     ws = new WebSocket(protocol + window.location.host + "/ws");
+    ws.binaryType = "arraybuffer";
 
     ws.onopen = () => startSendingFrames();
     ws.onmessage = (event) => {
-        if (event.data && event.data.startsWith("data:image")) {
-            processedVideo.src = event.data;
-        }
+        const blob = new Blob([event.data], { type: "image/jpeg" });
+        processedVideo.src = URL.createObjectURL(blob);
     };
     ws.onclose = () => cameraActive && setTimeout(connectWebSocket, 2000);
 }
@@ -202,14 +202,21 @@ function startSendingFrames() {
         if (!localVideo.srcObject || localVideo.readyState < HTMLMediaElement.HAVE_CURRENT_DATA)
             return requestAnimationFrame(sendFrame);
 
-        captureCanvas.width = localVideo.videoWidth;
-        captureCanvas.height = localVideo.videoHeight;
-        ctx.drawImage(localVideo, 0, 0, captureCanvas.width, captureCanvas.height);
-
-        const dataUrl = captureCanvas.toDataURL("image/jpeg", 0.5);
-        if (ws && ws.readyState === WebSocket.OPEN) ws.send(dataUrl.split(",")[1]);
-        lastSendTime = timestamp;
-        frameAnimationId = requestAnimationFrame(sendFrame);
+        // captureCanvas.width = localVideo.videoWidth;
+        // captureCanvas.height = localVideo.videoHeight;
+        // ctx.drawImage(localVideo, 0, 0, captureCanvas.width, captureCanvas.height);
+        // const targetWidth = 320;
+        const targetHeight = Math.floor(localVideo.videoHeight * (320 / localVideo.videoWidth));
+        captureCanvas.width = targetWidth;
+        captureCanvas.height = targetHeight;
+        ctx.drawImage(localVideo, 0, 0, targetWidth, targetHeight);
+        captureCanvas.toBlob((blob) => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(blob);
+            }
+            lastSendTime = timestamp;
+            requestAnimationFrame(sendFrame);
+        }, "image/webp", 0.5);
     };
     frameAnimationId = requestAnimationFrame(sendFrame);
 }
@@ -219,16 +226,38 @@ stopBtn.onclick = () => stopCamera();
 
 recordBtn.onclick = async () => {
     if (!cameraActive) return;
-    const patientId = document.getElementById("patientId").value.trim();
-    const exercise = document.getElementById("exercise").value;
-    if (!patientId || !exercise) return;
+    const patientIdElem = document.getElementById("patientId");
+    const exerciseElem = document.getElementById("exercise");
+    const handElem = document.getElementById("hand");
+    const confidenceSliderElem = document.getElementById("confidenceSlider");
+
+
+    const patientId = patientIdElem.value.trim();
+    const exercise = exerciseElem.value;
+    const hand = handElem.value;
+    const confidence = parseFloat(confidenceSliderElem.value);
+
+    console.log("Отправляемые данные:", { patientId, exercise, hand, confidence });
+
+    if (!patientId) {
+        setStatus("⚠️ Укажите номер пациента", "orange");
+        return;
+    }
+    if (!exercise) {
+        setStatus("⚠️ Выберите упражнение", "orange");
+        return;
+    }
+    if (!hand) {
+        setStatus("⚠️ Выберите руку", "orange");
+        return;
+    }
 
     if (!recording) {
         hideSignalCanvas();
         const resp = await fetch("/start_record", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ patientId, exercise })
+            body: JSON.stringify({ patientId, exercise, confidence, hand })
         });
         const data = await resp.json();
         if (data.status === "started") {
@@ -253,12 +282,29 @@ let processingStatusDiv = null;
 
 if (startProcessingBtn) {
     startProcessingBtn.addEventListener("click", async () => {
-        const patientId = document.getElementById("patientId").value.trim();
-        const exercise = document.getElementById("exercise").value;
-        const confidence = parseFloat(document.getElementById("confidenceSlider").value);
+        const patientIdElem = document.getElementById("patientId");
+        const exerciseElem = document.getElementById("exercise");
+        const handElem = document.getElementById("hand");
+        const confidenceSliderElem = document.getElementById("confidenceSlider");
 
-        if (!patientId || !exercise) {
-            setStatus("⚠️ Укажите номер пациента и выберите упражнение", "orange");
+
+        const patientId = patientIdElem.value.trim();
+        const exercise = exerciseElem.value;
+        const hand = handElem.value;
+        const confidence = parseFloat(confidenceSliderElem.value);
+
+        console.log("Отправляемые данные:", { patientId, exercise, hand, confidence });
+
+        if (!patientId) {
+            setStatus("⚠️ Укажите номер пациента", "orange");
+            return;
+        }
+        if (!exercise) {
+            setStatus("⚠️ Выберите упражнение", "orange");
+            return;
+        }
+        if (!hand) {
+            setStatus("⚠️ Выберите руку", "orange");
             return;
         }
 
@@ -271,7 +317,7 @@ if (startProcessingBtn) {
             const response = await fetch("/raw_data_processing", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ patientId, exercise, confidence })
+                body: JSON.stringify({ patientId, exercise, confidence, hand })
             });
 
             if (!response.ok) {
