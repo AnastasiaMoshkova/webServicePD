@@ -14,7 +14,6 @@ class FE:
         self.config_fe = ""
         self.config_feature = config_feature
         self.feature_type = [
-            "NumA",
             "AvgFrq",
             "VarFrq",
             "AvgVopen",
@@ -25,7 +24,6 @@ class FE:
             "VarVclose",
             "DecA",
             "DecV",
-            "DecLin",
         ]
         self.threshold_aplitude = {
             "FT": 5,
@@ -35,17 +33,16 @@ class FE:
         self.algorithm_filtering = "by_low_amplitude"
         self.FEATURE_NORMS = {
             "NumA": 40,
-            "AvgFrq": 4,
-            "VarFrq": 35,
-            "AvgVopen": 2,
-            "AvgVclose": 2,
-            "AvgA": 50,
-            "VarA": 15,
-            "VarVopen": 30,
-            "VarVclose": 30,
-            "DecA": 2,
-            "DecV": 1.5,
-            "DecLin": 0.1,
+            "AvgFrq": 3.62,
+            "VarFrq": 10,
+            "AvgVopen": 5,
+            "AvgVclose": 5.24,
+            "AvgA": 73.89,
+            "VarA": 18,
+            "VarVopen": 21,
+            "VarVclose": 19.2,
+            "DecA": 1,
+            "DecV": 1,
         }
 
     def loadfileInterval_hand(self, datapoint, start, stop):
