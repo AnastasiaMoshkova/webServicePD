@@ -98,23 +98,6 @@ async def websocket_endpoint(websocket: WebSocket):
 
             # Обработка через MediaPipe
             frame = detector.findHands(frame_orig.copy())
-            lmList = detector.findPosition(frame_orig, draw=True)
-
-            # Пример: расстояние между указательным и большим пальцами
-            if len(lmList) >= 9:
-                x1, y1 = lmList[4][1], lmList[4][2]
-                x2, y2 = lmList[8][1], lmList[8][2]
-                length = int(((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5)
-                cv2.putText(
-                    frame,
-                    f"Dist: {length}px",
-                    (30, 80),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    1,
-                    (0, 255, 0),
-                    2,
-                )
-
             if recording:
                 if out is None:
                     # Создаём writer динамически по размеру кадра
@@ -271,6 +254,9 @@ async def raw_data_processing(experiment_info: RawDataRequest):
         # "signal_img": image_signal_path,
         # "stats_img": image_stats_path,
     }
+    shutil.rmtree(local_dir, ignore_errors=True)
+    if not os.path.isdir(local_dir):
+        os.mkdir(local_dir)
 
     return JSONResponse(content=result)
 
