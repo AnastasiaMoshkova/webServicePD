@@ -172,8 +172,6 @@ function stopCamera() {
     startBtn.style.display = 'inline-block';
     stopBtn.style.display = 'none';
     startBtn.disabled = false;
-
-    hideSignalCanvas();
 }
 
 function connectWebSocket() {
@@ -205,8 +203,9 @@ function startSendingFrames() {
         // captureCanvas.width = localVideo.videoWidth;
         // captureCanvas.height = localVideo.videoHeight;
         // ctx.drawImage(localVideo, 0, 0, captureCanvas.width, captureCanvas.height);
-        // const targetWidth = 320;
-        const targetHeight = Math.floor(localVideo.videoHeight * (320 / localVideo.videoWidth));
+
+        const targetWidth = 320;
+        const targetHeight = Math.floor(localVideo.videoHeight * (targetWidth / localVideo.videoWidth));
         captureCanvas.width = targetWidth;
         captureCanvas.height = targetHeight;
         ctx.drawImage(localVideo, 0, 0, targetWidth, targetHeight);
@@ -216,7 +215,7 @@ function startSendingFrames() {
             }
             lastSendTime = timestamp;
             requestAnimationFrame(sendFrame);
-        }, "image/webp", 0.5);
+        }, "image/jpeg", 0.5);
     };
     frameAnimationId = requestAnimationFrame(sendFrame);
 }
@@ -430,7 +429,6 @@ function drawSignalGraph(result) {
         let py = signalCanvas.height - padding - val * scaleY;
         ctx.fillText(val.toFixed(0), padding - 10, py);
     }
-
     ctx.strokeStyle = "blue";
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -465,94 +463,166 @@ function drawSignalGraph(result) {
     }
 }
 
+
+
 function drawFeatureBars(features) {
     featureCanvas.style.display = "block";
-    featureCanvas.width = featureCanvas.offsetWidth || 800;
-    featureCanvas.height = 300;
-
+    featureCanvas.width = featureCanvas.offsetWidth || 380;
+    featureCanvas.height = featureCanvas.offsetWidth || 380;
+    LEVEL3_VALUES = {
+        "NumA": 0.9,
+        "AvgFrq": 0.8,
+        "VarFrq": 2.3,
+        "AvgVopen": 0.538,
+        "AvgVclose": 0.538,
+        "AvgA": 0.64,
+        "VarA": 1.54,
+        "VarVopen": 2,
+        "VarVclose": 1.65,
+        "DecA": 1,
+        "DecV": 1,
+    }
     const ctx = featureCanvas.getContext("2d");
     ctx.clearRect(0, 0, featureCanvas.width, featureCanvas.height);
 
     const entries = Object.entries(features);
+    const N = entries.length;
 
     const maxValueRaw = Math.max(...entries.map(([_, v]) => v));
-    function roundUpToStep(value, step = 5) {
-        return Math.ceil(value / step) * step;
-    }
+    const maxValue = Math.ceil(maxValueRaw);
 
-    const maxValue = roundUpToStep(maxValueRaw, 1);
-    // Отступы для осей и полей
-    const paddingLeft = 50;   // место слева для оси Y
-    const paddingRight = 30;  // место справа, чтобы бары не выходили из видимой области
-    const paddingBottom = 40; // место снизу для подписей оси X
-    const paddingTop = 10;    // небольшой верхний отступ
+    const centerX = featureCanvas.width / 2;
+    const centerY = featureCanvas.height / 2;
+    const radius = Math.min(centerX, centerY) - 105;
 
-    const chartWidth = featureCanvas.width - paddingLeft - paddingRight;
-    const chartHeight = featureCanvas.height - paddingBottom - paddingTop;
-
-    ctx.font = "12px monospace";
+    ctx.font = "bold 20px monospace";
     ctx.textAlign = "center";
-
-    // Рисуем ось Y
-    ctx.strokeStyle = "#000";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(paddingLeft, paddingTop);
-    ctx.lineTo(paddingLeft, paddingTop + chartHeight);
-    ctx.stroke();
-
-    // Рисуем деления и подписи по оси Y
-    const yStepCount = 5;
-    ctx.textAlign = "right";
     ctx.textBaseline = "middle";
 
-    for (let i = 0; i <= yStepCount; i++) {
-        const val = (maxValue / yStepCount) * i;
-        const y = paddingTop + chartHeight - (chartHeight / yStepCount) * i;
-
-        // Рисуем деление
+    for (let i = 1; i <= maxValue; i++) {
+        const r = (radius * i) / maxValue;
         ctx.beginPath();
-        ctx.moveTo(paddingLeft - 5, y);
-        ctx.lineTo(paddingLeft, y);
+        ctx.strokeStyle = "#ccc";
+        ctx.lineWidth = 1;
+        ctx.arc(centerX, centerY, r, 0, 2 * Math.PI);
         ctx.stroke();
 
-        // Пишем значение
-        ctx.fillText(val.toFixed(2), paddingLeft - 10, y);
+        ctx.fillStyle = "#000";
+        ctx.fillText(i, centerX, centerY - r - 5);
     }
 
-    // Рисуем столбцы
-    const barWidth = chartWidth / entries.length - 10;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "bottom";
+    entries.forEach(([key], i) => {
+        const angle = (i / N) * 2 * Math.PI - Math.PI / 2;
+        const x = centerX + radius * Math.cos(angle);
+        const y = centerY + radius * Math.sin(angle);
 
-    entries.forEach(([key, value], i) => {
-        const x = paddingLeft + i * (barWidth + 10) + 5;
-        const barHeight = (value / maxValue) * chartHeight;
-        const y = paddingTop + chartHeight - barHeight;
+        ctx.beginPath();
+        ctx.strokeStyle = "#aaa";
+        ctx.moveTo(centerX, centerY);
+        ctx.lineTo(x, y);
+        ctx.stroke();
 
-        ctx.fillStyle = "#007bff";
-        ctx.fillRect(x, y, barWidth, barHeight);
-
-        ctx.fillStyle = "#333";
-        ctx.fillText(key, x + barWidth / 2, paddingTop + chartHeight + 20);
+        ctx.fillStyle = "#000";
+        ctx.textAlign = x < centerX ? "right" : (x > centerX ? "left" : "center");
+        ctx.textBaseline = y < centerY ? "bottom" : "top";
+        ctx.fillText(key, x, y);
     });
 
-    // Рисуем линию нормы на уровне 1, если maxValue >= 1
-    if (maxValue >= 1) {
-        ctx.strokeStyle = "red";
-        ctx.lineWidth = 2;
-        const normLineY = paddingTop + chartHeight - (chartHeight * 1) / maxValue;
-        ctx.beginPath();
-        ctx.moveTo(paddingLeft, normLineY);
-        ctx.lineTo(featureCanvas.width - paddingRight, normLineY);
-        ctx.stroke();
+    // === Отрисовка полученных признаков ===
+    ctx.beginPath();
+    entries.forEach(([_, value], i) => {
+        const angle = (i / N) * 2 * Math.PI - Math.PI / 2;
+        const r = (radius * value) / maxValue;
+        const x = centerX + r * Math.cos(angle);
+        const y = centerY + r * Math.sin(angle);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    });
 
-        ctx.fillStyle = "red";
-        ctx.textAlign = "right";
-        ctx.textBaseline = "bottom";
-        ctx.fillText("Норма", featureCanvas.width - paddingRight + 5, normLineY - 5);
+    ctx.closePath();
+    ctx.strokeStyle = "green";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = "rgba(0,255,0,0.3)";
+    ctx.fill();
+
+    // Отрисовка значений нормы ===
+    if (maxValue >= 1) {
+        ctx.beginPath();
+        entries.forEach(([_, __], i) => {
+            const angle = (i / N) * 2 * Math.PI - Math.PI / 2;
+            const r = (radius * 1) / maxValue;
+            const x = centerX + r * Math.cos(angle);
+            const y = centerY + r * Math.sin(angle);
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        });
+        ctx.closePath();
+        ctx.strokeStyle = "red";
+        ctx.lineWidth = 3;
+        ctx.stroke();
     }
+
+    // === Отрисовка показателей при болезни Паркинсона ===
+    ctx.beginPath();
+    entries.forEach(([key], i) => {
+        const angle = (i / N) * 2 * Math.PI - Math.PI / 2;
+        const value = LEVEL3_VALUES[key] ?? 3;
+        const r = (radius * value) / maxValue;
+        const x = centerX + r * Math.cos(angle);
+        const y = centerY + r * Math.sin(angle);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    });
+    ctx.closePath();
+    ctx.strokeStyle = "blue";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // === Отрисовка легенды ===
+    const legendX = 20;
+    const legendY = 20;
+    const legendWidth = 200;
+    const legendHeight = 90;
+
+    ctx.fillStyle = "rgba(255,255,255,0.8)";
+    ctx.fillRect(legendX, legendY, legendWidth, legendHeight);
+    ctx.strokeStyle = "#ccc";
+    ctx.strokeRect(legendX, legendY, legendWidth, legendHeight);
+
+    ctx.font = "15px Arial, sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+
+    ctx.strokeStyle = "red";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(legendX + 10, legendY + 15);
+    ctx.lineTo(legendX + 40, legendY + 15);
+    ctx.stroke();
+    ctx.fillStyle = "#000";
+    ctx.fillText("\u041d\u043e\u0440\u043c\u0430", legendX + 50, legendY + 15);
+
+    ctx.strokeStyle = "blue";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(legendX + 10, legendY + 30);
+    ctx.lineTo(legendX + 40, legendY + 30);
+    ctx.stroke();
+    ctx.fillStyle = "#000";
+    ctx.fillText("\u0411\u043e\u043b\u0435\u0437\u043d\u044c \u041f\u0430\u0440\u043a\u0438\u043d\u0441\u043e\u043d\u0430", legendX + 50, legendY + 30);
+
+    ctx.strokeStyle = "green";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(legendX + 10, legendY + 45);
+    ctx.lineTo(legendX + 40, legendY + 45);
+    ctx.stroke();
+    ctx.fillStyle = "#000";
+    ctx.fillText("\u041f\u043e\u043b\u0443\u0447\u0435\u043d\u043d\u044b\u0435 \u043f\u0440\u0438\u0437\u043d\u0430\u043a\u0438", legendX + 50, legendY + 45);
 }
+
+
 const FEATURE_DESCRIPTIONS = {
     NumA: "Количество пиков (амплитуд)",
     AvgFrq: "Средняя частота",
@@ -565,7 +635,6 @@ const FEATURE_DESCRIPTIONS = {
     VarVclose: "Дисперсия скорости закрытия",
     DecA: "Коэф. затухания амплитуды",
     DecV: "Коэф. затухания скорости",
-    DecLin: "Линейный тренд"
 };
 
 function renderFeatureLegend(features) {
