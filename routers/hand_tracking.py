@@ -12,7 +12,8 @@ from fastapi import APIRouter, File, Form, Request, UploadFile, WebSocket, WebSo
 from fastapi.responses import JSONResponse, RedirectResponse
 
 import HandTrackingModule as htm
-from core.minio_client import BUCKET_NAME, minio_client
+
+# from core.minio_client import BUCKET_NAME, minio_client
 from core.templates import templates
 from hand_processing.automarking import AutoMarking
 from hand_processing.raw_data_processing import PreProcessing
@@ -30,6 +31,8 @@ out = None
 output_file = None
 wCam, hCam = 640, 480
 local_dir = "/app/static/recordings/"
+
+# local_dir = "static/recordings/"
 shutil.rmtree(local_dir, ignore_errors=True)
 if not os.path.isdir(local_dir):
     os.mkdir(local_dir)
@@ -43,7 +46,6 @@ class RawDataRequest(BaseModel):
 
 
 def get_fe_config() -> Dict:
-    """Полный конфиг"""
     global _fe_config
     if _fe_config is None:
         _fe_config = dict(EnvYAML("configs/feature.yaml"))
@@ -160,10 +162,10 @@ async def upload(
 ):
     rel_path = file.filename
     logger.info(f"Received file: {rel_path}")
-    if not minio_client:
-        return JSONResponse(
-            status_code=500, content={"status": "error", "message": "MinIO client not initialized"}
-        )
+    # if not minio_client:
+    #     return JSONResponse(
+    #         status_code=500, content={"status": "error", "message": "MinIO client not initialized"}
+    #     )
 
     # Очищаем и пересоздаём локальную директорию
     shutil.rmtree(local_dir, ignore_errors=True)
@@ -179,16 +181,16 @@ async def upload(
             content={"status": "error", "message": f"Invalid path: {str(e)}"},
         )
 
-    try:
-        if not minio_client.bucket_exists(BUCKET_NAME):
-            minio_client.make_bucket(BUCKET_NAME)
-            print(f"Bucket {BUCKET_NAME} created")
-    except Exception as e:
-        print(f"MinIO connection error: {e}")
-        return JSONResponse(
-            status_code=500,
-            content={"status": "error", "message": f"MinIO connection failed: {str(e)}"},
-        )
+    # try:
+    #     if not minio_client.bucket_exists(BUCKET_NAME):
+    #         minio_client.make_bucket(BUCKET_NAME)
+    #         print(f"Bucket {BUCKET_NAME} created")
+    # except Exception as e:
+    #     print(f"MinIO connection error: {e}")
+    #     return JSONResponse(
+    #         status_code=500,
+    #         content={"status": "error", "message": f"MinIO connection failed: {str(e)}"},
+    #     )
 
     try:
         content = await file.read()
@@ -235,11 +237,10 @@ async def raw_data_processing(experiment_info: RawDataRequest):
     features, features_norm = feature_extraction.processing(
         os.path.join(local_dir, "auto_algoritm_MP"), exercise
     )
-    # stats = statistic.processing()
     logger.info(f"Получены признаки: {features}")
     logger.info(f"Нормы: {features_norm}")
-    image_signal_path = "/static/results/images/signal_picture.png"
-    # image_stats_path = "/static/results/mp1_L_m1__mp_angle.png"
+    # image_signal_path = "/static/results/images/signal_picture.png"
+    # # image_stats_path = "/static/results/mp1_L_m1__mp_angle.png"
     timestamps = np.array(frames) / fps
     logger.info(f"timestmps: {timestamps}")
     result = {
@@ -261,24 +262,24 @@ async def raw_data_processing(experiment_info: RawDataRequest):
     return JSONResponse(content=result)
 
 
-def download_folder(BUCKET_NAME: str, prefix: str, local_dir: str):
-    """
-    Скачивает папку из MinIO, сохраняя структуру директорий.
+# def download_folder(BUCKET_NAME: str, prefix: str, local_dir: str):
+#     """
+#     Скачивает папку из MinIO, сохраняя структуру директорий.
 
-    :param BUCKET_NAME: имя бакета
-    :param prefix: префикс (папка) в бакете, которую нужно скачать
-    :param dest_dir: локальная папка для сохранения
-    """
-    os.makedirs(local_dir, exist_ok=True)
-    objects = minio_client.list_objects(BUCKET_NAME, prefix=prefix, recursive=True)
+#     :param BUCKET_NAME: имя бакета
+#     :param prefix: префикс (папка) в бакете, которую нужно скачать
+#     :param dest_dir: локальная папка для сохранения
+#     """
+#     os.makedirs(local_dir, exist_ok=True)
+#     objects = minio_client.list_objects(BUCKET_NAME, prefix=prefix, recursive=True)
 
-    for obj in objects:
-        logger.info("tute")
-        relative_path = obj.object_name[len(prefix) :].lstrip("/")  # убираем префикс и лишний слэш
-        local_path = os.path.join(local_dir, "patinet1", relative_path)
+#     for obj in objects:
+#         logger.info("tute")
+#         relative_path = obj.object_name[len(prefix) :].lstrip("/")  # убираем префикс и лишний слэш
+#         local_path = os.path.join(local_dir, "patinet1", relative_path)
 
-        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+#         os.makedirs(os.path.dirname(local_path), exist_ok=True)
 
-        # Скачиваем объект
-        minio_client.fget_object(BUCKET_NAME, obj.object_name, local_path)
-        logger.info(f"✅ Скачан: {obj.object_name} -> {local_path}")
+#         # Скачиваем объект
+#         minio_client.fget_object(BUCKET_NAME, obj.object_name, local_path)
+#         logger.info(f"✅ Скачан: {obj.object_name} -> {local_path}")
