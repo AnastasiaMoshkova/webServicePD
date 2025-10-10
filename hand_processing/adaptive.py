@@ -29,9 +29,7 @@ class Adaptive:
             s.append(z[i] ** 2)
         return sqrt(sum(s))
 
-    def _point_alg_signal(self, values, frame, frac, order_min, order_max):
-        filtered = lowess(values, frame, is_sorted=True, frac=frac, it=0)  # 0.02
-        pixel, value = np.array(filtered[:, 0]), np.array(filtered[:, 1])
+    def _point_alg_signal(self, value, order_min, order_max):
         maxPoint = argrelmax(value, order=order_max)
         minPoint = argrelmin(value, order=order_min)
         return maxPoint, minPoint
@@ -83,14 +81,17 @@ class Adaptive:
     получения точек максиммумов и минимумов на основе побдора параметров 
     """
 
-    def deleterAmplitude(self, maxPointX, maxPointY, minPointX, minPointY, threshhold):
+    def deleterAmplitude(self, maxPointX, maxPointY, minPointX, minPointY, threshhold=15):
         resultMax = []
         resultMin = []
+        maxPointX = maxPointX.tolist() if hasattr(maxPointX, "tolist") else list(maxPointX)
+        maxPointY = maxPointY.tolist() if hasattr(maxPointY, "tolist") else list(maxPointY)
+        minPointX = minPointX.tolist() if hasattr(minPointX, "tolist") else list(minPointX)
+        minPointY = minPointY.tolist() if hasattr(minPointY, "tolist") else list(minPointY)
         for i in range(len(maxPointX)):
             if (maxPointY[i] - minPointY[i + 1]) < threshhold:
                 resultMax.append(i)
                 resultMin.append(i + 1)
-
         if len(resultMax) != 0:
             resultMax.reverse()
             for k in resultMax:
@@ -103,10 +104,10 @@ class Adaptive:
                 del minPointY[k]
         return maxPointX, maxPointY, minPointX, minPointY
 
-    def get_point(self, values, frame, fps):
+    def get_point(self, values, frames, fps):
         values = np.array(values)
         # values = signal.detrend(values)
-        W = fftfreq(values.size, d=frame[1] - frame[0])
+        W = fftfreq(values.size, d=frames[1] - frames[0])
         f_signal = rfft(values)
         lst = list(abs(f_signal[1:300] / 1000))
         ff = list(W[1:300])
@@ -134,17 +135,19 @@ class Adaptive:
             frac, order_min, order_max = 0.005, 10, 10
             # frac, order_min, order_max = 0.005, 5, 5
 
-        # fps = 1 / (frame[1] - frame[0])
         frac, order_min, order_max = (
             frac * fps / 100,
             round(order_min * fps / 100),
             round(order_max * fps / 100),
         )
-        maxTemp, minTemp = self._point_alg_signal(
-            values, frame, frac=frac, order_min=order_min, order_max=order_max
-        )
+        filtered = lowess(values, frames, is_sorted=True, frac=frac, it=0)
+        frames, values = np.array(filtered[:, 0]), np.array(filtered[:, 1])
+        (
+            maxTemp,
+            minTemp,
+        ) = self._point_alg_signal(values, order_min=order_min, order_max=order_max)
         maxP, minP, maxA, minA = self._signalPoint(
             list(maxTemp[0]), minTemp[0], list(values[maxTemp[0]]), list(values[minTemp[0]])
         )
-        # maxP, maxA, minP, minA = self.deleterAmplitude(maxP, maxA, minP, minA, 10)
-        return maxP, minP, maxA, minA, frac, order_min, order_max
+        maxP, maxA, minP, minA = self.deleterAmplitude(maxP, maxA, minP, minA)
+        return maxP, minP, maxA, minA, frames, values

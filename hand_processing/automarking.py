@@ -55,29 +55,6 @@ class AutoMarking:
         df = pd.concat(df_result, axis=0).reset_index(drop=True)
         return df
 
-    def deleterAmplitude(self, maxPointX, maxPointY, minPointX, minPointY, threshhold=15):
-        resultMax = []
-        resultMin = []
-        maxPointX = maxPointX.tolist() if hasattr(maxPointX, 'tolist') else list(maxPointX)
-        maxPointY = maxPointY.tolist() if hasattr(maxPointY, 'tolist') else list(maxPointY)
-        minPointX = minPointX.tolist() if hasattr(minPointX, 'tolist') else list(minPointX)
-        minPointY = minPointY.tolist() if hasattr(minPointY, 'tolist') else list(minPointY)
-        for i in range(len(maxPointX)):
-            if (maxPointY[i] - minPointY[i + 1]) < threshhold:
-                resultMax.append(i)
-                resultMin.append(i + 1)
-        if len(resultMax) != 0:
-            resultMax.reverse()
-            for k in resultMax:
-              del maxPointX[k]
-              del maxPointY[k]
-        if len(resultMin) != 0:
-            resultMin.reverse()
-            for k in resultMin:
-              del minPointX[k]
-              del minPointY[k]
-        return maxPointX, maxPointY, minPointX, minPointY
-
     # запись точек в файл
     def write_point_hand(
         self,
@@ -129,13 +106,10 @@ class AutoMarking:
                 json.dump(datapoint, f)
 
     # получение точек авто разметки по сигналам двигательной активности рук
-    def auto_point_hand(self, values, frame, fps):
+    def auto_point_hand(self, values, frames, fps):
         auto_alg_class = Adaptive()
-        maxP, minP, maxA, minA, frac, order_min, order_max = auto_alg_class.get_point(
-            values, frame, fps
-        )
-        return np.array(frame)[maxP], np.array(frame)[minP], maxA, minA, frac, order_min, order_max
-        # return maxP, minP, maxA, minA, frac, order_min, order_max
+        maxP, minP, maxA, minA, frames, values = auto_alg_class.get_point(values, frames, fps)
+        return np.array(frames)[maxP], np.array(frames)[minP], maxA, minA, frames, values
 
     def hand_processing_auto_point(self, path_to_dir, hand, exercise, fps):
         signal_class = HandDataAngle()  # FIXME config
@@ -148,12 +122,10 @@ class AutoMarking:
             input_file, exercise_dict[exercise], hand
         )  # FIXME
         if len(values) > 50:  # FIXME config
-            maxP, minP, maxA, minA, frac, order_min, order_max = self.auto_point_hand(
-                values, frames, fps
-            )
-            maxP, maxA,minP, minA = self.deleterAmplitude(maxP, maxA, minP, minA)
-            # maxP, minP, maxA, minA = self.signalPoint(maxP, minP, maxA, minA)
-            if True:  # FIXME save peacture config
+
+            maxP, minP, maxA, minA, frames, values = self.auto_point_hand(values, frames, fps)
+
+            if False:  # FIXME save peacture config
                 output_dir = os.path.join(path_to_dir, "images")
                 if not os.path.isdir(output_dir):
                     os.mkdir(output_dir)

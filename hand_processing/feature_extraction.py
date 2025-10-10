@@ -110,7 +110,7 @@ class FE:
 
         path_to_file = os.path.join(path, file)
         datapoint = json.load(open(path_to_file))
-        start = 100
+        start = 10
         stop = 1700
         maxPointX, maxPointY, minPointX, minPointY = self.loadfileInterval_hand(
             datapoint, start, stop
