@@ -1,15 +1,15 @@
 NumA:
   _target_: hand_processing.feature.NumA
   config:
-    stop: 17 #1700
+    stop: 1700 #1700
 AvgFrq:
   _target_: hand_processing.feature.AvgFrq
   config:
-    k: 100
+    k: 20
 VarFrq:
   _target_: hand_processing.feature.VarFrq
   config:
-    k: 100
+    k: 20
 AvgVopen:
   _target_: hand_processing.feature.AvgVopen
   config:
@@ -22,15 +22,15 @@ AvgA:
 VarA:
   _target_: hand_processing.feature.VarA
   config:
-    k: 100
+    k: 20
 VarVopen:
   _target_: hand_processing.feature.VarVopen
   config:
-    k: 100
+    k: 20
 VarVclose:
   _target_: hand_processing.feature.VarVclose
   config:
-    k: 100
+    k: 20
 DecA:
   _target_: hand_processing.feature.DecA
   config:
@@ -51,11 +51,11 @@ Length:
 AvgFrqF:
   _target_: hand_processing.feature.AvgFrqF
   config:
-    k: 100
+    k: 20
 VarFrqF:
   _target_: hand_processing.feature.VarFrqF
   config:
-    k: 100
+    k: 20
 DecValueA:
   _target_: hand_processing.feature.DecValueA
   config:

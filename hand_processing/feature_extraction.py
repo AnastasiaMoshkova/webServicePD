@@ -7,6 +7,10 @@ import glob
 from functools import reduce
 from scipy.signal import find_peaks
 from hydra.utils import instantiate
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class FE:
@@ -87,20 +91,6 @@ class FE:
                 del minPointY[k]
         return maxPointX, maxPointY, minPointX, minPointY
 
-    # def _norm_coefficient(self, path_to_folder, exercise, mode):
-    #     if self.config_fe["feature_extractor"][mode]["norm_coeff"]:
-    #         norm_coeff_name = self.config_fe["feature_extractor"][mode]["norm_coeff_name"]
-    #         path = os.path.normpath(path_to_folder)
-    #         # path = os.path.join(*path.split(os.sep)[:-1])
-    #         path = os.path.join("\\".join(path.split(os.sep)[:-1]))
-    #         norm_coeff_file = json.load(open(os.path.join(path, "coefficients", "palm_width.json")))
-    #         norm_coeff = norm_coeff_file[norm_coeff_name]
-    #     else:
-    #         norm_coeff = 1
-    #     if exercise == "PS":
-    #         norm_coeff = 1
-    #     return norm_coeff
-
     def feature_calculation_hand(
         self,
         path,
@@ -145,7 +135,7 @@ class FE:
     def norm_feature(self, result):
         res_norm = {}
         for key, value in result.items():
-            res_norm[key] = value / self.FEATURE_NORMS[key]
+            res_norm[key] = round(value / self.FEATURE_NORMS[key], 2)
         return res_norm
 
     def processing(self, local_dir, exercise):
