@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Анализ мимики - Болезнь Паркинсона</title>
+    <link rel="stylesheet" href="facial_styles.css">
+    <!-- MediaPipe -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.js" 
+            crossorigin="anonymous"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>📹 Анализ мимики лица</h1>
+        
+        <!-- Табы переключения режимов -->
+        <div class="facial-mode-tabs">
+            <button id="facialModeCamera" class="active">Запись с камеры</button>
+            <button id="facialModeUpload">Загрузка файла</button>
+        </div>
+
+        <!-- Секция камеры -->
+        <div id="facialCameraSection">
+            <div class="facial-settings-wrapper">
+                <div class="facial-patient-info">
+                    <h3>Информация о пациенте</h3>
+                    <div class="facial-form-group">
+                        <label for="facialPatientId">Номер пациента:</label>
+                        <input type="text" id="facialPatientId" placeholder="Введите номер пациента">
+                    </div>
+                    <div class="facial-form-group">
+                        <label for="facialExpression">Выражение/Упражнение:</label>
+                        <select id="facialExpression">
+                            <option value="">Выберите...</option>
+                            <option value="neutral">Нейтральное выражение</option>
+                            <option value="smile">Улыбка</option>
+                            <option value="surprise">Удивление</option>
+                            <option value="anger">Гнев</option>
+                            <option value="sadness">Грусть</option>
+                            <option value="fear">Страх</option>
+                            <option value="disgust">Отвращение</option>
+                            <option value="eye_blink">Моргание</option>
+                            <option value="eyebrow_raise">Подъем бровей</option>
+                            <option value="mouth_open">Открывание рта</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="facial-video-container">
+                <video id="facialVideo" autoplay playsinline muted style="display:none;"></video>
+                <canvas id="facialCanvas" style="border: 3px solid #3498db; border-radius: 10px; background: #000;"></canvas>
+            </div>
+
+            <div class="facial-controls">
+                <button id="facialStartBtn">📷 Запустить камеру</button>
+                <button id="facialStopBtn" style="display:none;">⏹ Остановить камеру</button>
+                <button id="facialRecordBtn">🔴 Начать запись</button>
+            </div>
+
+            <div style="text-align: center; margin-top: 20px;">
+                <button id="startFacialProcessingBtn">⚙️ Начать обработку</button>
+            </div>
+        </div>
+
+        <!-- Секция загрузки -->
+        <div id="facialUploadSection" style="display: none;">
+            <div class="facial-upload-area">
+                <h3>Загрузка видеофайла для анализа</h3>
+                <p>Выберите видеофайл с записью лица пациента</p>
+                <input type="file" id="facialFiles" accept="video/*,.avi,.mp4,.mov">
+                <br>
+                <button id="facialUploadBtn">📤 Загрузить файл</button>
+            </div>
+
+            <div class="facial-settings-wrapper" style="margin-top: 30px;">
+                <div class="facial-patient-info">
+                    <h3>Параметры обработки</h3>
+                    <div class="facial-form-group">
+                        <label for="facialPatientId">Номер пациента:</label>
+                        <input type="text" id="facialPatientId" placeholder="Введите номер">
+                    </div>
+                    <div class="facial-form-group">
+                        <label for="facialExpression">Выражение:</label>
+                        <select id="facialExpression">
+                            <option value="">Выберите...</option>
+                            <option value="neutral">Нейтральное</option>
+                            <option value="smile">Улыбка</option>
+                            <option value="surprise">Удивление</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div style="text-align: center; margin-top: 20px;">
+                <button id="startFacialProcessingBtn">⚙️ Начать обработку</button>
+            </div>
+        </div>
+
+        <!-- Результаты -->
+        <canvas id="facialSignalCanvas" style="display:none;"></canvas>
+        <canvas id="facialFeatureCanvas" style="display:none;"></canvas>
+        <div id="facialFeatureLegend"></div>
+    </div>
+
+    <script src="facial_tracking_mediapipe.js"></script>
+</body>
+</html>
