@@ -10,7 +10,7 @@ from envyaml import EnvYAML
 from typing import Dict
 from fastapi import APIRouter, File, Form, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, RedirectResponse
-
+from datetime import datetime
 import HandTrackingModule as htm
 
 # from core.minio_client import BUCKET_NAME, minio_client
@@ -27,6 +27,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 _fe_config = None
 recording = False
+countdown_time = None
+start_time = None
 out = None
 output_file = None
 wCam, hCam = 640, 480
@@ -76,7 +78,7 @@ async def websocket_endpoint(websocket: WebSocket):
         os.mkdir(local_dir)
     global recording, out, output_file
     await websocket.accept()
-    print("✅ WebSocket подключен")
+    logger.info("WebSocket подключен")
     detector = htm.handDetector(detectionCon=0.7)
 
     try:
@@ -91,22 +93,59 @@ async def websocket_endpoint(websocket: WebSocket):
 
             np_arr = np.frombuffer(data, np.uint8)
             if np_arr.size == 0:
-                print("Пустой numpy массив")
+                logger.error("Пустой numpy массив")
                 continue
             frame_orig = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
             if frame_orig is None:
-                print("Не удалось декодировать изображение (битые данные)")
+                logger.error("Не удалось декодировать изображение (битые данные)")
                 continue
 
             # Обработка через MediaPipe
             frame = detector.findHands(frame_orig.copy())
             if recording:
+                # инициализация записи
                 if out is None:
-                    # Создаём writer динамически по размеру кадра
                     hCam, wCam = frame_orig.shape[:2]
                     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
                     out = cv2.VideoWriter(output_file, fourcc, 20.0, (wCam, hCam))
-                out.write(frame_orig)
+
+                # вычисляем, сколько осталось секунд
+                if start_time and countdown_time:
+                    elapsed = (datetime.now() - start_time).total_seconds()
+                    remaining = int(countdown_time - elapsed)
+
+                    # если время вышло — автоостановка
+                    if remaining <= 0:
+                        recording = False
+                        remaining = 0
+                        if out is not None:
+                            out.release()
+                            out = None
+                        try:
+                            await websocket.send_json(
+                                {"type": "recording_stopped", "reason": "time_up"}
+                            )
+                            logger.info("JSON отправлен фронту: recording_stopped")
+                        except Exception as e:
+                            logger.info("Не удалось отправить JSON:", e)
+
+                    # рисуем таймер
+                    cv2.putText(
+                        frame,
+                        f"{remaining} c",
+                        (20, 50),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        1.5,
+                        (0, 0, 255),
+                        3,
+                    )
+
+                # записываем только если out реально открыт
+                if out is not None:
+                    try:
+                        out.write(frame_orig)
+                    except Exception as e:
+                        print("Ошибка записи кадра:", e)
 
             success, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 45])
             if not success:
@@ -126,21 +165,24 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 @router.post("/start_record")
-async def start_record():
-    """Запуск записи"""
-    global recording, out, output_file
+async def start_record(duration: int = 20):  # по умолчанию 20 секунд
+    """Запуск записи с обратным отсчётом"""
+    global recording, out, output_file, countdown_time, start_time
 
     if recording:
         return JSONResponse({"status": "already recording"})
-    else:
-        shutil.rmtree(local_dir, ignore_errors=True)
-        if not os.path.isdir(local_dir):
-            os.mkdir(local_dir)
+
+    shutil.rmtree(local_dir, ignore_errors=True)
+    os.makedirs(local_dir, exist_ok=True)
 
     output_file = os.path.join(local_dir, "test_video.mp4")
     recording = True
     out = None
-    return JSONResponse({"status": "started"})
+
+    countdown_time = duration
+    start_time = datetime.now()
+
+    return JSONResponse({"status": "started", "duration": duration})
 
 
 @router.post("/stop_record")
@@ -251,7 +293,8 @@ async def raw_data_processing(experiment_info: RawDataRequest):
         "min_X": minP.tolist() if hasattr(minP, "tolist") else minP,
         "max_Y": maxA.tolist() if hasattr(maxA, "tolist") else maxA,
         "min_Y": minA.tolist() if hasattr(minA, "tolist") else minA,
-        "features": features_norm,
+        "features_norm": features_norm,
+        "features": features,
         # "signal_img": image_signal_path,
         # "stats_img": image_stats_path,
     }

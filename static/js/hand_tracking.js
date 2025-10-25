@@ -181,6 +181,24 @@ function connectWebSocket() {
 
     ws.onopen = () => startSendingFrames();
     ws.onmessage = (event) => {
+        // Проверяем, пришло ли бинарное изображение или текст
+        if (typeof event.data === "string") {
+            try {
+                const msg = JSON.parse(event.data);
+                if (msg.type === "recording_stopped") {
+                    console.log("⏹ Автоостановка записи:", msg.reason);
+                    recording = false;
+                    recordBtn.textContent = "🔴 Начать запись";
+                    recordBtn.classList.remove("recording");
+                    setStatus("⏹ Запись завершена", "orange");
+                }
+            } catch (e) {
+                console.warn("Нераспознанное сообщение:", event.data);
+            }
+            return;
+        }
+
+        // Если бинарные данные — это кадр
         const blob = new Blob([event.data], { type: "image/jpeg" });
         processedVideo.src = URL.createObjectURL(blob);
     };
@@ -329,7 +347,7 @@ if (startProcessingBtn) {
             setTimeout(() => {
                 drawSignalGraph(result);
                 if (result.features) {
-                    drawFeatureBars(result.features);
+                    drawFeatureBars(result.features_norm);
                     renderFeatureLegend(result.features);
                 }
             }, 50);
@@ -469,19 +487,7 @@ function drawFeatureBars(features) {
     featureCanvas.style.display = "block";
     featureCanvas.width = featureCanvas.offsetWidth || 380;
     featureCanvas.height = featureCanvas.offsetWidth || 380;
-    LEVEL3_VALUES = {
-        "NumA": 0.9,
-        "AvgFrq": 0.8,
-        "VarFrq": 2.3,
-        "AvgVopen": 0.538,
-        "AvgVclose": 0.538,
-        "AvgA": 0.64,
-        "VarA": 1.54,
-        "VarVopen": 2,
-        "VarVclose": 1.65,
-        "DecA": 1,
-        "DecV": 1,
-    }
+
     const ctx = featureCanvas.getContext("2d");
     ctx.clearRect(0, 0, featureCanvas.width, featureCanvas.height);
 
@@ -567,7 +573,7 @@ function drawFeatureBars(features) {
     ctx.beginPath();
     entries.forEach(([key], i) => {
         const angle = (i / N) * 2 * Math.PI - Math.PI / 2;
-        const value = LEVEL3_VALUES[key] ?? 3;
+        const value = LEVEL_PD_NORMS[key] ?? 3;
         const r = (radius * value) / maxValue;
         const x = centerX + r * Math.cos(angle);
         const y = centerY + r * Math.sin(angle);
@@ -636,29 +642,79 @@ const FEATURE_DESCRIPTIONS = {
     DecA: "Коэф. затухания амплитуды",
     DecV: "Коэф. затухания скорости",
 };
+const LEVEL_PD_NORMS = {
+    "NumA": 0.9,
+    "AvgFrq": 0.8,
+    "VarFrq": 2.3,
+    "AvgVopen": 0.538,
+    "AvgVclose": 0.538,
+    "AvgA": 0.64,
+    "VarA": 1.54,
+    "VarVopen": 2,
+    "VarVclose": 1.65,
+    "DecA": 1,
+    "DecV": 1,
+};
+const FEATURE_NORMA = {
+    "NumA": 40,
+    "AvgFrq": 3.62,
+    "VarFrq": 10,
+    "AvgVopen": 5,
+    "AvgVclose": 5.24,
+    "AvgA": 73.89,
+    "VarA": 18,
+    "VarVopen": 21,
+    "VarVclose": 19.2,
+    "DecA": 1,
+    "DecV": 1,
+}
+
 
 function renderFeatureLegend(features) {
     featureLegend.style.display = "block";
     featureLegend.innerHTML = "";
 
-    const container = document.createElement("div");
-    // горизонтальный flex-контейнер, центрированное содержимое
-    container.style.display = "flex";
-    container.style.flexDirection = "column";
-    container.style.alignItems = "center"; // или "flex-start" для выравнивания по левой стороне
-    container.style.gap = "10px";
-    container.style.fontFamily = "monospace";
+
+    const table = document.createElement("table");
+    table.style.borderCollapse = "collapse";
+    table.style.width = "100%";
+    table.style.maxWidth = "900px";
+    table.style.margin = "20px auto";
+    table.style.fontFamily = "monospace";
+    table.style.boxShadow = "0 0 10px rgba(0,0,0,0.1)";
+    table.style.borderRadius = "12px";
+    table.style.overflow = "hidden";
+
+    const header = document.createElement("tr");
+    header.innerHTML = `
+        <th style="padding: 10px; background: #f5f5f5; text-align:left;">Признак</th>
+        <th style="padding: 10px; background: #f5f5f5;">🔴 Норма</th>
+        <th style="padding: 10px; background: #f5f5f5;">🔵 Паркинсон</th>
+        <th style="padding: 10px; background: #f5f5f5;">🟢 Пациент</th>
+    `;
+    table.appendChild(header);
 
     Object.keys(features).forEach(key => {
-        const item = document.createElement("div");
-        item.textContent = `${key} - ${FEATURE_DESCRIPTIONS[key] || "—"}`;
-        item.style.fontWeight = "bold";
-        item.style.minWidth = "180px";
-        item.style.textAlign = "center";
-        container.appendChild(item);
+        const desc = FEATURE_DESCRIPTIONS[key] || "—";
+        const normValue = FEATURE_NORMA[key]; // значение нормы
+        const parkinsonValue = (FEATURE_NORMA[key] * LEVEL_PD_NORMS[key]).toFixed(2) ?? "—";
+        const patientValue = features[key].toFixed(2);
+
+        const row = document.createElement("tr");
+        row.style.borderBottom = "1px solid #ddd";
+        row.innerHTML = `
+            <td style="padding: 8px 12px; text-align:left;">
+                <strong>${key}</strong><br>
+                <small style="color:gray;">${desc}</small>
+            </td>
+            <td style="text-align:center; color:red;">${normValue}</td>
+            <td style="text-align:center; color:blue;">${parkinsonValue}</td>
+            <td style="text-align:center; color:green; font-weight:bold;">${patientValue}</td>
+        `;
+        table.appendChild(row);
     });
 
-    featureLegend.appendChild(container);
+    featureLegend.appendChild(table);
 }
 
 
