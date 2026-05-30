@@ -7,7 +7,7 @@ import json
 
 # import matplotlib.pyplot as plt
 # from matplotlib.pyplot import figure
-from data_base.hand import HandBase
+from app.modalities.data_base.hand import HandBase
 
 TIMESTAMP_COEFFICIENT = 1000000
 

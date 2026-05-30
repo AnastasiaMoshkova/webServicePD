@@ -10,8 +10,8 @@ import shutil
 # from pprint import pprint
 # import matplotlib.pyplot as plt
 # from matplotlib.pyplot import figure
-from data_base.hand2D import HandDataAngle
-from hand_processing.adaptive import Adaptive
+from app.modalities.data_base.hand2D import HandDataAngle
+from app.modalities.hand.processing.adaptive import Adaptive
 import re
 import logging
 

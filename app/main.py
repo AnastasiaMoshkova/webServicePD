@@ -1,7 +1,7 @@
+from app.routers import gait, hand_tracking, mimic, tremor, voice
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from routers import tremor, hand_tracking, mimic, gait, voice
 from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 
 app = FastAPI()

@@ -1,0 +1,70 @@
+NumA:
+  _target_: app.modalities.hand.processing.feature.NumA
+  config:
+    stop: 1700 #1700
+AvgFrq:
+  _target_: app.modalities.hand.processing.feature.AvgFrq
+  config:
+    k: 20
+VarFrq:
+  _target_: app.modalities.hand.processing.feature.VarFrq
+  config:
+    k: 20
+AvgVopen:
+  _target_: app.modalities.hand.processing.feature.AvgVopen
+  config:
+AvgVclose:
+  _target_: app.modalities.hand.processing.feature.AvgVclose
+  config:
+AvgA:
+  _target_: app.modalities.hand.processing.feature.AvgA
+  config:
+VarA:
+  _target_: app.modalities.hand.processing.feature.VarA
+  config:
+    k: 20
+VarVopen:
+  _target_: app.modalities.hand.processing.feature.VarVopen
+  config:
+    k: 20
+VarVclose:
+  _target_: app.modalities.hand.processing.feature.VarVclose
+  config:
+    k: 20
+DecA:
+  _target_: app.modalities.hand.processing.feature.DecA
+  config:
+    start: 1 #100
+DecV:
+  _target_: app.modalities.hand.processing.feature.DecV
+  config:
+    start: 1 #100
+DecFA:
+  _target_: app.modalities.hand.processing.feature.DecFA
+  config:
+DecFV:
+  _target_: app.modalities.hand.processing.feature.DecFV
+  config:
+Length:
+  _target_: app.modalities.hand.processing.feature.Length
+  config:
+AvgFrqF:
+  _target_: app.modalities.hand.processing.feature.AvgFrqF
+  config:
+    k: 20
+VarFrqF:
+  _target_: app.modalities.hand.processing.feature.VarFrqF
+  config:
+    k: 20
+DecValueA:
+  _target_: app.modalities.hand.processing.feature.DecValueA
+  config:
+DecValueV:
+  _target_: app.modalities.hand.processing.feature.DecValueV
+  config:
+NumAF:
+  _target_: app.modalities.hand.processing.feature.NumAF
+  config:
+DecLin:
+  _target_: app.modalities.hand.processing.feature.DecLin
+  config:

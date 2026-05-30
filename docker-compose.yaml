@@ -17,30 +17,6 @@ services:
       webservicepd_pd_web_net:
         aliases:
           - pd_web
-    # depends_on:
-    #   - pd-minio
-
-#   pd-minio:
-#     container_name: pd-minio
-#     image: minio/minio:latest
-#     restart: always
-#     ports:
-#       - "9000:9000"  
-#       - "9001:9001"
-#     volumes:
-#       - minio_data:/data
-#     networks:
-#       webservicepd_pd_web_net:
-#         aliases:
-#           - pd-minio
-#     command: server /data --address ":9000" --console-address ":9001"
-#     environment:
-#       - MINIO_ROOT_USER=admin
-#       - MINIO_ROOT_PASSWORD=123admin123
-#       - MINIO_DOMAIN=pd-minio
-
-# volumes:
-#   minio_data:
 
 networks:
   webservicepd_pd_web_net:
