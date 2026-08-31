@@ -18,15 +18,16 @@ logger = logging.getLogger(__name__)
 
 
 class HandTrackingService(BaseModalityService):
-    def __init__(self, local_dir: str = "/app/static/recordings/") -> None:
-        self.local_dir = local_dir
-        self._fe_config: Optional[Dict[str, Any]] = None
+    """
+    Состояние записи (recording/out/output_file/...) хранится не на самом
+    сервисе (он один на всё приложение), а в словаре по session_id — иначе
+    два одновременных пользователя писали бы видео в один и тот же файл.
+    """
 
-        self.recording = False
-        self.countdown_time: Optional[int] = None
-        self.start_time: Optional[datetime] = None
-        self.out = None
-        self.output_file: Optional[str] = None
+    def __init__(self, local_dir: str = "static/recordings/") -> None:
+        self.base_dir = local_dir
+        self._fe_config: Optional[Dict[str, Any]] = None
+        self._sessions: Dict[str, Dict[str, Any]] = {}
 
         self.hand_data_processing = PreProcessing()
         self.automarker = AutoMarking()
@@ -38,55 +39,73 @@ class HandTrackingService(BaseModalityService):
             self._fe_config = dict(EnvYAML(cfg_dir / "feature.yaml"))
         return self._fe_config
 
-    def reset_local_dir(self) -> None:
-        shutil.rmtree(self.local_dir, ignore_errors=True)
-        os.makedirs(self.local_dir, exist_ok=True)
+    def get_session(self, session_id: str) -> Dict[str, Any]:
+        if session_id not in self._sessions:
+            self._sessions[session_id] = {
+                "recording": False,
+                "countdown_time": None,
+                "start_time": None,
+                "out": None,
+                "output_file": None,
+                "local_dir": os.path.join(self.base_dir, session_id),
+            }
+        return self._sessions[session_id]
 
-    def start_record(self, duration: int = 20) -> None:
-        if self.recording:
+    def reset_local_dir(self, session_id: str) -> None:
+        s = self.get_session(session_id)
+        shutil.rmtree(s["local_dir"], ignore_errors=True)
+        os.makedirs(s["local_dir"], exist_ok=True)
+
+    def start_record(self, session_id: str, duration: int = 20) -> None:
+        s = self.get_session(session_id)
+        if s["recording"]:
             return
-        self.reset_local_dir()
-        self.output_file = os.path.join(self.local_dir, "test_video.mp4")
-        self.recording = True
-        self.out = None
-        self.countdown_time = duration
-        self.start_time = datetime.now()
+        self.reset_local_dir(session_id)
+        s["output_file"] = os.path.join(s["local_dir"], "test_video.mp4")
+        s["recording"] = True
+        s["out"] = None
+        s["countdown_time"] = duration
+        s["start_time"] = datetime.now()
 
-    def stop_record(self, clear_output: bool = True) -> Optional[str]:
-        self.recording = False
-        if self.out is not None:
-            self.out.release()
-            self.out = None
-        saved_file = self.output_file
+    def stop_record(self, session_id: str, clear_output: bool = True) -> Optional[str]:
+        s = self.get_session(session_id)
+        s["recording"] = False
+        if s["out"] is not None:
+            s["out"].release()
+            s["out"] = None
+        saved_file = s["output_file"]
         if clear_output:
-            self.output_file = None
-        self.countdown_time = None
-        self.start_time = None
+            s["output_file"] = None
+        s["countdown_time"] = None
+        s["start_time"] = None
         return saved_file
 
-    def init_writer(self, frame_shape) -> None:
-        if self.out is not None:
+    def init_writer(self, session_id: str, frame_shape) -> None:
+        s = self.get_session(session_id)
+        if s["out"] is not None:
             return
-        if not self.output_file:
-            self.output_file = os.path.join(self.local_dir, "test_video.mp4")
+        if not s["output_file"]:
+            s["output_file"] = os.path.join(s["local_dir"], "test_video.mp4")
         h_cam, w_cam = frame_shape[:2]
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        self.out = cv2.VideoWriter(self.output_file, fourcc, 20.0, (w_cam, h_cam))
+        s["out"] = cv2.VideoWriter(s["output_file"], fourcc, 20.0, (w_cam, h_cam))
 
-    def upload(self, file_name: str, content: bytes) -> Dict[str, Any]:
+    def upload(self, session_id: str, file_name: str, content: bytes) -> Dict[str, Any]:
         rel_path = (file_name or "").strip().lstrip("/")
         if not rel_path:
             raise ValueError("Invalid path")
 
-        self.reset_local_dir()
-        local_path = os.path.join(self.local_dir, "test_video.mp4")
+        self.reset_local_dir(session_id)
+        s = self.get_session(session_id)
+        local_path = os.path.join(s["local_dir"], "test_video.mp4")
         with open(local_path, "wb") as f:
             f.write(content)
 
         logger.info("Saved locally: %s", local_path)
         return {"status": "success", "uploaded": rel_path}
 
-    def raw_data_processing(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    def raw_data_processing(self, session_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        s = self.get_session(session_id)
         patient_id = payload["patientId"]
         exercise = payload["exercise"]
         confidence = payload["confidence"]
@@ -98,12 +117,12 @@ class HandTrackingService(BaseModalityService):
             confidence,
         )
 
-        fps = self.hand_data_processing.processing(self.local_dir)
+        fps = self.hand_data_processing.processing(s["local_dir"])
         max_p, min_p, max_a, min_a, values, frames = self.automarker.processing(
-            self.local_dir, exercise, fps, hand
+            s["local_dir"], exercise, fps, hand
         )
         features, features_norm = self.feature_extraction.processing(
-            os.path.join(self.local_dir, "auto_algoritm_MP"), exercise
+            os.path.join(s["local_dir"], "auto_algoritm_MP"), exercise
         )
         timestamps = np.array(frames) / fps
         result = {
@@ -117,7 +136,7 @@ class HandTrackingService(BaseModalityService):
             "features_norm": features_norm,
             "features": features,
         }
-        self.reset_local_dir()
+        self.reset_local_dir(session_id)
         return result
 
     def predict_binary(self, payload: Dict[str, Any]) -> Dict[str, Any]:
