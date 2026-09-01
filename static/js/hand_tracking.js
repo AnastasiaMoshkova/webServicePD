@@ -131,6 +131,12 @@ let recording = false;
 let cameraActive = false;
 let frameAnimationId = null;
 let currentSettings = { confidence: 0.6 };
+// MediaPipe Hands на сервере обрабатывает кадр ~100+ мс — заметно дольше, чем
+// интервал между кадрами с камеры (30 fps). Если слать кадры по таймеру, не
+// дожидаясь ответа, очередь необработанных кадров растёт безостановочно —
+// видео на глазах всё сильнее отстаёт от реальности. Поэтому шлём кадр только
+// после того, как получили обратно предыдущий — сервер сам определяет темп.
+let frameInFlight = false;
 
 const captureCanvas = document.createElement("canvas");
 const ctx = captureCanvas.getContext("2d");
@@ -179,7 +185,10 @@ function connectWebSocket() {
     ws = new WebSocket(protocol + window.location.host + "/ws");
     ws.binaryType = "arraybuffer";
 
-    ws.onopen = () => startSendingFrames();
+    ws.onopen = () => {
+        frameInFlight = false; // на случай переподключения посреди ожидания ответа
+        startSendingFrames();
+    };
     ws.onmessage = (event) => {
         // Проверяем, пришло ли бинарное изображение или текст
         if (typeof event.data === "string") {
@@ -200,27 +209,27 @@ function connectWebSocket() {
 
         // Если бинарные данные — это кадр
         const blob = new Blob([event.data], { type: "image/jpeg" });
+        const oldUrl = processedVideo.src;
         processedVideo.src = URL.createObjectURL(blob);
+        if (oldUrl && oldUrl.startsWith("blob:")) URL.revokeObjectURL(oldUrl);
+        frameInFlight = false; // сервер ответил — можно слать следующий кадр
     };
     ws.onclose = () => cameraActive && setTimeout(connectWebSocket, 2000);
 }
 
 function startSendingFrames() {
-    const FRAME_RATE = 30;
-    const FRAME_INTERVAL = 1000 / FRAME_RATE;
+    const MAX_FRAME_RATE = 30; // верхний потолок, реальный темп задаёт ack от сервера
+    const MIN_FRAME_INTERVAL = 1000 / MAX_FRAME_RATE;
     let lastSendTime = 0;
 
     const sendFrame = (timestamp) => {
         if (!cameraActive) return;
+        if (frameInFlight) return requestAnimationFrame(sendFrame); // ждём ответа сервера на предыдущий кадр
         if (!lastSendTime) lastSendTime = timestamp;
-        if (timestamp - lastSendTime < FRAME_INTERVAL) return requestAnimationFrame(sendFrame);
+        if (timestamp - lastSendTime < MIN_FRAME_INTERVAL) return requestAnimationFrame(sendFrame);
 
         if (!localVideo.srcObject || localVideo.readyState < HTMLMediaElement.HAVE_CURRENT_DATA)
             return requestAnimationFrame(sendFrame);
-
-        // captureCanvas.width = localVideo.videoWidth;
-        // captureCanvas.height = localVideo.videoHeight;
-        // ctx.drawImage(localVideo, 0, 0, captureCanvas.width, captureCanvas.height);
 
         const targetWidth = 320;
         const targetHeight = Math.floor(localVideo.videoHeight * (targetWidth / localVideo.videoWidth));
@@ -229,6 +238,7 @@ function startSendingFrames() {
         ctx.drawImage(localVideo, 0, 0, targetWidth, targetHeight);
         captureCanvas.toBlob((blob) => {
             if (ws && ws.readyState === WebSocket.OPEN) {
+                frameInFlight = true;
                 ws.send(blob);
             }
             lastSendTime = timestamp;
@@ -296,6 +306,25 @@ window.addEventListener('beforeunload', stopCamera);
 // === ОБРАБОТКА ===
 const startProcessingBtn = document.getElementById("startProcessingBtn");
 let processingStatusDiv = null;
+let processingTimerId = null;
+
+// Индикатор "идёт работа": обработка запроса на сервере не отдаёт промежуточный
+// прогресс (обычный POST, не WebSocket), поэтому честный процент не показать —
+// но живая анимация + секундомер хотя бы явно показывают, что приложение не зависло.
+(function injectProcessingSpinnerStyle() {
+    const style = document.createElement("style");
+    style.textContent = `
+        @keyframes btn-processing-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.55; }
+        }
+        .btn-processing {
+            animation: btn-processing-pulse 1.1s ease-in-out infinite;
+            cursor: progress !important;
+        }
+    `;
+    document.head.appendChild(style);
+})();
 
 if (startProcessingBtn) {
     startProcessingBtn.addEventListener("click", async () => {
@@ -327,8 +356,15 @@ if (startProcessingBtn) {
 
         if (!processingStatusDiv) createProcessingStatusDiv();
         startProcessingBtn.disabled = true;
+        startProcessingBtn.classList.add("btn-processing");
         setStatus("");
-        startProcessingBtn.textContent = "⏳ Обработка...";
+
+        const processingStartedAt = Date.now();
+        startProcessingBtn.textContent = "⏳ Обработка... (0 с)";
+        processingTimerId = setInterval(() => {
+            const secs = Math.floor((Date.now() - processingStartedAt) / 1000);
+            startProcessingBtn.textContent = `⏳ Обработка... (${secs} с)`;
+        }, 500);
 
         try {
             const response = await fetch("/raw_data_processing", {
@@ -338,12 +374,18 @@ if (startProcessingBtn) {
             });
 
             if (!response.ok) {
-                setStatus("❌ Ошибка на сервере", "red");
+                let message = "Ошибка на сервере";
+                try {
+                    const errBody = await response.json();
+                    if (errBody && errBody.message) message = errBody.message;
+                } catch (e) { /* тело не JSON — оставляем дефолтное сообщение */ }
+                setStatus("❌ " + message, "red");
                 return;
             }
 
             const result = await response.json();
-            setStatus("✅ Обработка завершена", "green");
+            const totalSecs = Math.round((Date.now() - processingStartedAt) / 1000);
+            setStatus(`✅ Обработка завершена за ${totalSecs} с`, "green");
             setTimeout(() => {
                 drawSignalGraph(result);
                 if (result.features) {
@@ -355,7 +397,10 @@ if (startProcessingBtn) {
         } catch (err) {
             setStatus("❌ Ошибка сети", "red");
         } finally {
+            clearInterval(processingTimerId);
+            processingTimerId = null;
             startProcessingBtn.disabled = false;
+            startProcessingBtn.classList.remove("btn-processing");
             startProcessingBtn.textContent = "Начать обработку";
         }
     });

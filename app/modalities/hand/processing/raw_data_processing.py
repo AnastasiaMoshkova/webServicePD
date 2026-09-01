@@ -104,19 +104,19 @@ class PreProcessing:
                             dict_points.update(
                                 {
                                     "info": {
-                                        "confidence": np.NaN,
-                                        "id_frame": np.NaN,
-                                        "visible_time": np.NaN,
-                                        "pinch_distance": np.NaN,
-                                        "pinch_strength": np.NaN,
-                                        "grab_angle": np.NaN,
-                                        "grab_strength": np.NaN,
-                                        "palm_width": np.NaN,
+                                        "confidence": np.nan,
+                                        "id_frame": np.nan,
+                                        "visible_time": np.nan,
+                                        "pinch_distance": np.nan,
+                                        "pinch_strength": np.nan,
+                                        "grab_angle": np.nan,
+                                        "grab_strength": np.nan,
+                                        "palm_width": np.nan,
                                         "timestamp": timestamp * 1000000,
-                                        "frame_id": np.NaN,
-                                        "tracking_frame_id": np.NaN,
+                                        "frame_id": np.nan,
+                                        "tracking_frame_id": np.nan,
                                         "framerate": fps,
-                                        "version": np.NaN,
+                                        "version": np.nan,
                                     }
                                 }
                             )

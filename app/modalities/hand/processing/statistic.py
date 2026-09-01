@@ -113,13 +113,13 @@ class Statistic:
             else:
                 features = [feature + "_" + ex for feature in features]
 
-            stage00 = data[data["stage"] == 0][features].replace(-1, np.NaN)  # .replace(0, np.NaN)
+            stage00 = data[data["stage"] == 0][features].replace(-1, np.nan)  # .replace(0, np.nan)
             stage12 = data[data["stage"].isin([1, 2])][features].replace(
-                -1, np.NaN
-            )  # .replace(0, np.NaN)
+                -1, np.nan
+            )  # .replace(0, np.nan)
             stage3 = data[data["stage"].isin([3])][features].replace(
-                -1, np.NaN
-            )  # .replace(0, np.NaN)
+                -1, np.nan
+            )  # .replace(0, np.nan)
 
             anova_result = []
             kruskal_result = []
@@ -286,10 +286,10 @@ class Statistic:
             else:
                 features = [feature + "_" + ex for feature in features]
 
-            stage00 = data[data["stage"] == 0][features].replace(-1, np.NaN)  # .replace(0, np.NaN)
+            stage00 = data[data["stage"] == 0][features].replace(-1, np.nan)  # .replace(0, np.nan)
             stage123 = data[data["stage"].isin([1, 2, 3])][features].replace(
-                -1, np.NaN
-            )  # .replace(0, np.NaN)
+                -1, np.nan
+            )  # .replace(0, np.nan)
 
             anova_result = []
             for feature in features:
@@ -375,17 +375,17 @@ class Statistic:
                 features = [feature + "_" + ex for feature in features]
 
             stage00 = data[data["stage"] == 0][features].replace(
-                -1, np.NaN
-            )  # .replace(0, np.NaN) #.replace([np.inf, -np.inf], np.NaN)
+                -1, np.nan
+            )  # .replace(0, np.nan) #.replace([np.inf, -np.inf], np.nan)
             stage1 = data[data["stage"] == 1][features].replace(
-                -1, np.NaN
-            )  # .replace(0, np.NaN) #.replace([np.inf, -np.inf], np.NaN)
+                -1, np.nan
+            )  # .replace(0, np.nan) #.replace([np.inf, -np.inf], np.nan)
             stage2 = data[data["stage"] == 2][features].replace(
-                -1, np.NaN
-            )  # .replace(0, np.NaN) #.replace([np.inf, -np.inf], np.NaN)
+                -1, np.nan
+            )  # .replace(0, np.nan) #.replace([np.inf, -np.inf], np.nan)
             stage3 = data[data["stage"] == 3][features].replace(
-                -1, np.NaN
-            )  # .replace(0, np.NaN) #.replace([np.inf, -np.inf], np.NaN)
+                -1, np.nan
+            )  # .replace(0, np.nan) #.replace([np.inf, -np.inf], np.nan)
 
             anova_result = []
             for feature in features:
@@ -578,33 +578,33 @@ class Statistic:
                 stage00 = data[(data[mds_updrs_col] == 0) & (data["dataset"] != "PD")][
                     features
                 ].replace(
-                    -1, np.NaN
-                )  # .replace(0, np.NaN)
+                    -1, np.nan
+                )  # .replace(0, np.nan)
                 stage0 = data[(data[mds_updrs_col] == 0) & (data["dataset"] == "PD")][
                     features
                 ].replace(
-                    -1, np.NaN
-                )  # .replace(0, np.NaN)
+                    -1, np.nan
+                )  # .replace(0, np.nan)
                 stage1 = data[(data[mds_updrs_col] == 1) & (data["dataset"] == "PD")][
                     features
                 ].replace(
-                    -1, np.NaN
-                )  # .replace(0, np.NaN)
+                    -1, np.nan
+                )  # .replace(0, np.nan)
                 stage2 = data[(data[mds_updrs_col] == 2) & (data["dataset"] == "PD")][
                     features
                 ].replace(
-                    -1, np.NaN
-                )  # .replace(0, np.NaN)
+                    -1, np.nan
+                )  # .replace(0, np.nan)
                 stage3 = data[(data[mds_updrs_col] == 3) & (data["dataset"] == "PD")][
                     features
                 ].replace(
-                    -1, np.NaN
-                )  # .replace(0, np.NaN)
+                    -1, np.nan
+                )  # .replace(0, np.nan)
                 stage4 = data[(data[mds_updrs_col] == 4) & (data["dataset"] == "PD")][
                     features
                 ].replace(
-                    -1, np.NaN
-                )  # .replace(0, np.NaN)
+                    -1, np.nan
+                )  # .replace(0, np.nan)
 
                 anova_result = []
                 kruskal_result = []
@@ -818,33 +818,33 @@ class Statistic:
                 stage00 = data[(data[mds_updrs_col] == 0) & (data["dataset"] != "PD")][
                     features
                 ].replace(
-                    -1, np.NaN
-                )  # .replace(0, np.NaN)
+                    -1, np.nan
+                )  # .replace(0, np.nan)
                 stage0 = data[(data[mds_updrs_col] == 0) & (data["dataset"] == "PD")][
                     features
                 ].replace(
-                    -1, np.NaN
-                )  # .replace(0, np.NaN)
+                    -1, np.nan
+                )  # .replace(0, np.nan)
                 stage1 = data[(data[mds_updrs_col] == 1) & (data["dataset"] == "PD")][
                     features
                 ].replace(
-                    -1, np.NaN
-                )  # .replace(0, np.NaN)
+                    -1, np.nan
+                )  # .replace(0, np.nan)
                 stage2 = data[(data[mds_updrs_col] == 2) & (data["dataset"] == "PD")][
                     features
                 ].replace(
-                    -1, np.NaN
-                )  # .replace(0, np.NaN)
+                    -1, np.nan
+                )  # .replace(0, np.nan)
                 stage3 = data[(data[mds_updrs_col] == 3) & (data["dataset"] == "PD")][
                     features
                 ].replace(
-                    -1, np.NaN
-                )  # .replace(0, np.NaN)
+                    -1, np.nan
+                )  # .replace(0, np.nan)
                 stage4 = data[(data[mds_updrs_col] == 4) & (data["dataset"] == "PD")][
                     features
                 ].replace(
-                    -1, np.NaN
-                )  # .replace(0, np.NaN)
+                    -1, np.nan
+                )  # .replace(0, np.nan)
 
                 stage0h = stage00.describe().loc[self.config["aggregation_type"]].values
                 stage0 = stage0.describe().loc[self.config["aggregation_type"]].values
@@ -1077,7 +1077,7 @@ class Statistic:
             else:
                 features = [feature + "_" + ex for feature in features]
 
-            data[features] = data[features].replace(0, np.NaN).replace(-1, np.NaN)
+            data[features] = data[features].replace(0, np.nan).replace(-1, np.nan)
             corr = data[features].corr()
             mask = np.triu(np.ones_like(corr, dtype=bool))
             cmap = sns.diverging_palette(100, 7, s=75, l=40, n=5, center="light", as_cmap=True)
