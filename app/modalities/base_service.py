@@ -13,3 +13,4 @@ class BaseModalityService:
 
     def insert_in_db(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         raise NotImplementedError("insert_in_db is not implemented")
+

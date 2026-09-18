@@ -1,244 +1,855 @@
-<!DOCTYPE html>
-<html lang="ru">
+{% extends 'base.html' %}
 
-<head>
-    <meta charset="UTF-8" />
-    <title>Походка</title>
-    <style>
-        nav {
-            background-color: #2c3e50;
-            padding: 15px 0;
-            margin-bottom: 30px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            text-align: center;
+{% block title %}Анализ походки (PD Gait){% endblock %}
+
+{% block content %}
+<!-- Tailwind CSS и Plotly CDN -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+<style>
+    .main-card {
+        background: #ffffff;
+        border-radius: 15px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        border: 1px solid #cfddee;
+        transition: all 0.3s ease;
+    }
+
+    .drop-zone {
+        border: 2px dashed #3498db;
+        border-radius: 12px;
+        background: #eef6ff;
+        transition: all 0.3s;
+    }
+
+    .drop-zone:hover,
+    .drop-zone.drag-over {
+        border-color: #2980b9;
+        background: #dbeafe;
+    }
+
+    .btn-main {
+        background: #3498db;
+        color: white;
+        border-radius: 8px;
+        font-weight: 600;
+        transition: all 0.3s;
+    }
+
+    .btn-main:hover:not(:disabled) {
+        background: #2980b9;
+    }
+
+    .btn-main:disabled {
+        background: #e9ecef;
+        color: #94a3b8;
+        cursor: not-allowed;
+    }
+
+    .btn-edit-action {
+        background: #f39c12;
+        color: white;
+        border-radius: 8px;
+        font-weight: 600;
+        transition: all 0.3s;
+    }
+
+    .btn-edit-action:hover {
+        background: #d35400;
+    }
+
+    .btn-edit-action.active {
+        background: #e74c3c;
+        animation: btn-processing-pulse 1.1s ease-in-out infinite;
+    }
+
+    .result-healthy {
+        background: #e8f5e9;
+        border: 1px solid #a5d6a7;
+        color: #1b5e20;
+    }
+
+    .result-pd {
+        background: #ffebee;
+        border: 1px solid #ef9a9a;
+        color: #b71c1c;
+    }
+
+    .feature-card {
+        background: #f8fafc;
+        border-radius: 10px;
+        border: 1px solid #cfddee;
+        padding: 14px;
+        transition: all 0.3s;
+    }
+
+    .feature-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+
+    .feature-card.model-feature {
+        background: #eef6ff;
+        border: 1px solid #93c5fd;
+    }
+
+    .norm-bar {
+        position: relative;
+        height: 10px;
+        background: #ffebee;
+        border-radius: 5px;
+        overflow: hidden;
+        margin-top: 8px;
+    }
+
+    .norm-bar .green-zone {
+        position: absolute;
+        height: 100%;
+        background: #66bb6a;
+        border-radius: 5px;
+    }
+
+    .norm-bar .marker {
+        position: absolute;
+        top: -3px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        transform: translateX(-50%);
+        border: 2px solid #ffffff;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        z-index: 10;
+    }
+
+    .norm-bar .marker.normal {
+        background: #2e7d32;
+    }
+
+    .norm-bar .marker.abnormal {
+        background: #c62828;
+    }
+
+    .norm-bar .marker.transition {
+        background: #f39c12;
+    }
+
+    .norm-bar .zone-transition-left,
+    .norm-bar .zone-transition-right {
+        position: absolute;
+        height: 100%;
+        background: #ffe082;
+        border-radius: 5px;
+        opacity: 0.8;
+    }
+
+    .edit-banner {
+        background: #f39c12;
+        color: white;
+        padding: 10px 16px;
+        border-radius: 8px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+
+    .point-card {
+        transition: all 0.2s;
+        cursor: pointer;
+    }
+
+    .point-card:hover {
+        transform: translateY(-2px);
+    }
+</style>
+
+<div class="w-full max-w-5xl mx-auto px-4 py-6 space-y-6">
+    <!-- Заголовок страницы -->
+    <div class="text-center">
+        <h1 class="text-lg sm:text-xl font-bold text-black mb-1">
+            Анализ инерциальных сигналов для классификации болезни Паркинсона
+        </h1>
+    </div>
+
+    <!-- Единый центральный блок загрузки и запуска -->
+    <div class="main-card p-6 max-w-2xl mx-auto">
+        <div class="flex items-center gap-3 mb-4">
+            <div
+                class="w-10 h-10 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center text-xl font-bold">
+                📂</div>
+            <div>
+                <h3 class="font-bold text-slate-700">Загрузка данных и анализ</h3>
+                <p class="text-xs text-slate-500">Загрузите файлы сигналов акселерометра и гироскопа</p>
+            </div>
+        </div>
+
+        <!-- Режимы выборки -->
+        <div class="flex gap-2 mb-4">
+            <button id="btnFolderMode" class="btn-main text-xs py-2 px-4 flex-1" onclick="setUploadMode('folder')">📁
+                Загрузить папку</button>
+            <button id="btnFilesMode" class="btn-main text-xs py-2 px-4 flex-1 bg-slate-200 text-slate-700"
+                onclick="setUploadMode('files')">📄 Выбрать 2 CSV</button>
+        </div>
+
+        <!-- Зона дропа -->
+        <div id="dropZone" class="drop-zone p-6 text-center cursor-pointer mb-4">
+            <div class="text-4xl mb-2" id="uploadIcon">📁</div>
+            <p class="text-sm font-semibold text-slate-700 mb-1" id="uploadTitle">Перетащите папку или кликните</p>
+            <p class="text-xs text-slate-500" id="uploadHint">Ожидаются: AccelerometerUncalibrated.csv и
+                GyroscopeUncalibrated.csv</p>
+
+            <input type="file" id="fileFolderInput" class="hidden" webkitdirectory directory multiple>
+            <input type="file" id="fileFilesInput" class="hidden" accept=".csv" multiple>
+        </div>
+
+        <!-- Статус данных -->
+        <div id="dataStatus" class="text-xs hidden mb-4">
+            <div
+                class="flex items-center justify-between text-emerald-700 bg-emerald-50 p-3 rounded-lg border border-emerald-200">
+                <span class="flex items-center gap-2"><span>✅</span><span id="dataStatusText">Файлы успешно
+                        определены</span></span>
+                <span class="text-[11px] font-semibold text-emerald-600">Готово к анализу</span>
+            </div>
+        </div>
+
+        <!-- Кнопка «Запустить анализ» -->
+        <button id="runBtn" disabled class="btn-main w-full py-3 text-sm font-bold shadow-md">
+            ▶ Запустить анализ
+        </button>
+
+        <!-- Прогресс выполнения -->
+        <div id="progressContainer" class="mt-4 hidden">
+            <div class="flex justify-between text-xs text-slate-500 mb-1">
+                <span id="progressLabel">Обработка...</span>
+                <span id="progressPercent">0%</span>
+            </div>
+            <div class="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                <div id="progressBar" class="h-full bg-blue-500 transition-all duration-300" style="width:0%"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Блок результатов -->
+    <div class="space-y-6">
+
+        <!-- 1. Итоговый вердикт -->
+        <div id="resultCard" class="main-card p-6 hidden">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-bold text-base text-slate-700">Результат диагностической модели</h3>
+                <div id="confidenceBadge" class="px-3 py-1 rounded-full text-xs font-bold"></div>
+            </div>
+            <div id="resultContent" class="grid grid-cols-2 gap-4"></div>
+        </div>
+
+        <!-- 2. График сигналов -->
+        <div class="main-card p-5">
+            <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <h3 class="font-bold text-slate-700">📈 Сигнал и выделенные сегменты</h3>
+                <div class="flex gap-2">
+                    <button id="editPointsBtn" class="btn-edit-action px-3 py-1.5 text-xs hidden">✏️ Редактировать
+                        точки</button>
+                    <button id="savePointsBtn" class="btn-main px-3 py-1.5 text-xs hidden">💾 Сохранить и
+                        пересчитать</button>
+                    <button id="cancelEditBtn"
+                        class="btn-main px-3 py-1.5 text-xs bg-slate-300 text-slate-700 hover:bg-slate-400 hidden">✕
+                        Отмена</button>
+                </div>
+            </div>
+            <div id="editBanner" class="edit-banner hidden">
+                <span>✏️</span>
+                <span>РЕЖИМ РЕДАКТИРОВАНИЯ: Выберите маркер ниже или кликните по маркерам на графике, затем выберите
+                    новую позицию.</span>
+            </div>
+            <div id="signalPlot" style="height:400px;"></div>
+        </div>
+
+        <!-- 3. Точки T1 - T5 -->
+        <div id="pointsCard" class="main-card p-5 hidden">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-bold text-slate-700 text-sm">🎯 Временные точки ключевых фаз</h3>
+                <span class="text-xs text-slate-500" id="editHint">Нажмите «Редактировать» для изменения</span>
+            </div>
+            <div id="pointsGrid" class="grid grid-cols-5 gap-2"></div>
+        </div>
+
+        <!-- 4. Фильтрованные сегменты -->
+        <div id="segmentsCard" class="main-card p-5 hidden">
+            <h3 class="font-bold mb-3 text-slate-700 text-sm">🦶 Выделенные сегменты ходьбы (Фильтрованные)</h3>
+            <div id="segmentsPlot" style="height:320px;"></div>
+        </div>
+
+        <!-- 5. Ключевые признаки с границами нормы -->
+        <div id="modelFeaturesCard" class="main-card p-5 hidden">
+            <h3 class="font-bold mb-1 text-slate-700 text-sm">📊 Признаки с референсными значениями нормы</h3>
+            <p class="text-xs text-slate-500 mb-3">Зеленая зона соответствует диапазонным значениям нормы.</p>
+            <div id="modelFeaturesGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"></div>
+        </div>
+
+        <!-- 6. Все признаки -->
+        <div id="allFeaturesCard" class="main-card p-5 hidden">
+            <h3 class="font-bold mb-1 text-slate-700 text-sm">📋 Полный спектр рассчитанных параметров</h3>
+            <p class="text-xs text-slate-500 mb-3">Извлеченные биомеханические и статистические признаки.</p>
+            <div id="allFeaturesGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/mimic.js"></script>
+<script>
+    const API_URL = '';
+    const STATE = {
+        accFile: null,
+        gyroFile: null,
+        uploadMode: 'folder',
+        currentResult: null,
+        editMode: false,
+        editablePoints: { T1: null, T2: null, T3: null, T4: null, T5: null },
+        originalPoints: null,
+        selectedPoint: null,
+        modelsReady: false
+    };
+
+    const POINT_COLORS = { 'T1': '#2ecc71', 'T2': '#f39c12', 'T3': '#3498db', 'T4': '#f39c12', 'T5': '#e74c3c' };
+    const POINT_LABELS = { 'T1': 'T1 (старт)', 'T2': 'T2 (поворот 1)', 'T3': 'T3 (ходьба 2)', 'T4': 'T4 (поворот 2)', 'T5': 'T5 (конец)' };
+
+    const FEATURE_NAMES_RU = {
+        'step_time_mean': 'Среднее время шага',
+        'step_time_std': 'Станд. откл. времени шага',
+        'step_time_cv': 'Вариация времени шага (CV)',
+        'cadence': 'Каденс (частота шагов)',
+        'step_count_exact': 'Количество шагов',
+        'segment_duration': 'Длительность сегмента',
+        'speed_m_s': 'Скорость ходьбы',
+        'turn_time_sec': 'Время поворота',
+        'freeze_index_mean': 'Индекс застывания',
+        'sample_entropy': 'Энтропия выборки',
+        'X_rms': 'СКО (ось X)',
+        'X_std': 'Станд. откл. (ось X)',
+        'X_jerk_std': 'Рывок (ось X)',
+        'X_dominant_freq': 'Доминантная частота (X)',
+        'Y_rms': 'СКО (ось Y)',
+        'Y_std': 'Станд. откл. (ось Y)',
+        'Y_jerk_std': 'Рывок (ось Y)',
+        'Y_dominant_freq': 'Доминантная частота (Y)',
+        'Z_rms': 'СКО (ось Z)',
+        'Z_std': 'Станд. откл. (ось Z)',
+        'Z_jerk_std': 'Рывок (ось Z)',
+        'Z_dominant_freq': 'Доминантная частота (Z)',
+        'magnitude_rms': 'СКО (модуль)',
+        'magnitude_std': 'Станд. откл. (модуль)',
+        'magnitude_jerk_std': 'Рывок (модуль)',
+        'magnitude_dominant_freq': 'Доминантная частота (модуль)',
+        'amplitude_mean': 'Средняя амплитуда пиков',
+        'amplitude_std': 'Станд. откл. амплитуды пиков',
+        'heel_strike_peak_mean': 'Амплитуда касания пятки сред.',
+        'heel_strike_peak_std': 'Амплитуда касания пятки станд.',
+        'step_time_asi': 'Индекс асимметрии времени шага',
+        'amplitude_asi': 'Индекс асимметрии амплитуды',
+        'cycle_symmetry_index': 'Индекс симметрии цикла',
+        'morphology_skewness': 'Асимметрия цикла ходьбы',
+        'morphology_kurtosis': 'Эксцесс цикла ходьбы',
+    };
+
+    const DEFAULT_UNITS = {
+        'cadence': 'шаги/мин', 'sample_entropy': 'у.е.',
+        'freeze_index_mean': 'у.е.', 'freeze_index_max': 'у.е.',
+        'step_time_cv': 'у.е.', 'step_time_mean': 'с', 'step_time_std': 'с',
+        'step_time_asi': 'у.е.', 'step_count_exact': 'шт.',
+        'speed_m_s': 'м/с', 'segment_duration': 'с', 'turn_time_sec': 'с',
+        'X_rms': 'м/с²', 'X_std': 'м/с²', 'X_jerk_std': 'м/с³', 'X_dominant_freq': 'Гц',
+        'Y_rms': 'м/с²', 'Y_std': 'м/с²', 'Y_jerk_std': 'м/с³', 'Y_dominant_freq': 'Гц',
+        'Z_rms': 'м/с²', 'Z_std': 'м/с²', 'Z_jerk_std': 'м/с³', 'Z_dominant_freq': 'Гц',
+        'mag_rms': 'м/с²', 'mag_std': 'м/с²', 'mag_jerk_std': 'м/с³', 'mag_dominant_freq': 'Гц',
+        'amplitude_mean': 'м/с²', 'amplitude_std': 'м/с²', 'morphology_kurtosis': 'у.е.',
+    };
+
+    function getUnits(key, serverUnits) {
+        if (serverUnits && serverUnits[key]) return serverUnits[key];
+        if (DEFAULT_UNITS[key]) return DEFAULT_UNITS[key];
+        return 'у.е.';
+    }
+
+    function setUploadMode(mode) {
+        STATE.uploadMode = mode;
+        var btnFolder = document.getElementById('btnFolderMode');
+        var btnFiles = document.getElementById('btnFilesMode');
+        var icon = document.getElementById('uploadIcon');
+        var title = document.getElementById('uploadTitle');
+        var hint = document.getElementById('uploadHint');
+
+        if (mode === 'folder') {
+            btnFolder.className = "btn-main text-xs py-2 px-4 flex-1";
+            btnFiles.className = "btn-main text-xs py-2 px-4 flex-1 bg-slate-200 text-slate-700";
+            icon.textContent = "📁";
+            title.textContent = "Перетащите папку или кликните";
+            hint.textContent = "Из папки возьмутся AccelerometerUncalibrated.csv и GyroscopeUncalibrated.csv";
+        } else {
+            btnFiles.className = "btn-main text-xs py-2 px-4 flex-1";
+            btnFolder.className = "btn-main text-xs py-2 px-4 flex-1 bg-slate-200 text-slate-700";
+            icon.textContent = "📄";
+            title.textContent = "Выберите 2 файла (Акселерометр + Гироскоп)";
+            hint.textContent = "Выберите файлы accelerometer*.csv и gyroscope*.csv";
+        }
+    }
+
+    var dropZone = document.getElementById('dropZone');
+    var fileFolderInput = document.getElementById('fileFolderInput');
+    var fileFilesInput = document.getElementById('fileFilesInput');
+
+    dropZone.onclick = function () {
+        if (STATE.uploadMode === 'folder') {
+            fileFolderInput.click();
+        } else {
+            fileFilesInput.click();
+        }
+    };
+
+    dropZone.ondragover = function (e) { e.preventDefault(); dropZone.classList.add('drag-over'); };
+    dropZone.ondragleave = function () { dropZone.classList.remove('drag-over'); };
+    dropZone.ondrop = function (e) {
+        e.preventDefault();
+        dropZone.classList.remove('drag-over');
+        handleFiles(e.dataTransfer.files);
+    };
+
+    fileFolderInput.onchange = function (e) { handleFiles(e.target.files); };
+    fileFilesInput.onchange = function (e) { handleFiles(e.target.files); };
+
+    function handleFiles(files) {
+        var fl = Array.from(files);
+        var accFile = fl.find(function (f) { return (/AccelerometerUncalibrated/i.test(f.name)) && f.name.endsWith('.csv'); });
+        var gyrFile = fl.find(function (f) { return (/GyroscopeUncalibrated/i.test(f.name)) && f.name.endsWith('.csv'); });
+
+        if (!accFile || !gyrFile) {
+            alert('Не найдены файлы AccelerometerUncalibrated.csv и GyroscopeUncalibrated.csv!');
+            return;
         }
 
-        nav a {
-            color: white;
-            text-decoration: none;
-            padding: 10px 20px;
-            margin: 0 5px;
-            border-radius: 5px;
-            transition: all 0.3s;
+        STATE.accFile = accFile;
+        STATE.gyroFile = gyrFile;
+
+        document.getElementById('dataStatus').classList.remove('hidden');
+        document.getElementById('dataStatusText').textContent = accFile.name + ' + ' + gyrFile.name;
+
+        updateRunButtonState();
+    }
+
+    async function checkModelsStatus() {
+        try {
+            var response = await fetch(API_URL + '/api/models-status');
+            if (!response.ok) return;
+            var status = await response.json();
+            STATE.modelsReady = status.ready;
+            updateRunButtonState();
+        } catch (err) { }
+    }
+
+    function updateRunButtonState() {
+        var runBtn = document.getElementById('runBtn');
+        var step1Done = STATE.accFile && STATE.gyroFile;
+        if (runBtn) runBtn.disabled = !(step1Done && STATE.modelsReady);
+    }
+
+    setInterval(checkModelsStatus, 3000);
+
+    document.getElementById('runBtn').onclick = async function () {
+        var runBtn = document.getElementById('runBtn');
+        runBtn.disabled = true;
+
+        document.getElementById('progressContainer').classList.remove('hidden');
+        document.getElementById('progressLabel').textContent = 'Передача файлов...';
+        document.getElementById('progressPercent').textContent = '15%';
+        document.getElementById('progressBar').style.width = '15%';
+
+        try {
+            var formData = new FormData();
+            formData.append('acc_file', STATE.accFile);
+            formData.append('gyro_file', STATE.gyroFile);
+
+            var response = await fetch(API_URL + '/api/process-signal', { method: 'POST', body: formData });
+            if (!response.ok) throw new Error('HTTP ' + response.status + ': ' + await response.text());
+
+            document.getElementById('progressLabel').textContent = 'Расчет признаков...';
+            document.getElementById('progressPercent').textContent = '65%';
+            document.getElementById('progressBar').style.width = '65%';
+
+            var result = await response.json();
+            STATE.currentResult = result;
+
+            document.getElementById('progressLabel').textContent = 'Отрисовка результатов...';
+            document.getElementById('progressPercent').textContent = '90%';
+            document.getElementById('progressBar').style.width = '90%';
+
+            displayResults(result);
+
+            document.getElementById('progressBar').style.width = '100%';
+            document.getElementById('progressPercent').textContent = '100%';
+        } catch (err) {
+            alert('Ошибка: ' + err.message);
+        } finally {
+            runBtn.disabled = false;
+        }
+    };
+
+    function displayResults(result) {
+        var resultCard = document.getElementById('resultCard');
+        resultCard.classList.remove('hidden');
+        var isPD = result.prediction === 1;
+
+        resultCard.className = 'main-card p-6 ' + (isPD ? 'result-pd' : 'result-healthy');
+        document.getElementById('resultContent').innerHTML =
+            '<div class="text-center"><div class="text-5xl mb-2">' + (isPD ? '🏥' : '✓') + '</div>' +
+            '<div class="text-2xl font-bold mb-1">' + (isPD ? "Parkinson's Disease" : 'Healthy (Норма)') + '</div>' +
+            '<div class="text-xs opacity-80">' + (isPD ? 'Выявлены характерные паттерны' : 'Патологических паттернов не выявлено') + '</div></div>' +
+            '<div class="text-center flex flex-col justify-center"><div class="text-4xl font-extrabold mb-1">' + (result.probability * 100).toFixed(1) + '%</div>' +
+            '<div class="text-xs opacity-80">Вероятность (Уверенность классификатора)</div></div>';
+
+        var confBadge = document.getElementById('confidenceBadge');
+        confBadge.className = 'px-3 py-1 rounded-full text-xs font-bold ' + (isPD ? 'bg-red-200 text-red-900' : 'bg-emerald-200 text-emerald-900');
+        confBadge.textContent = isPD ? 'PD DETECTED' : 'HEALTHY';
+
+        if (result.points) {
+            document.getElementById('pointsCard').classList.remove('hidden');
+            updatePointsDisplay();
         }
 
-        nav a:hover {
-            background-color: #3498db;
+        if (result.feature_norm) {
+            document.getElementById('modelFeaturesCard').classList.remove('hidden');
+            var modelGrid = document.getElementById('modelFeaturesGrid');
+            modelGrid.innerHTML = '';
+            var serverUnits = result.feature_units || {};
+
+            for (var key in result.feature_norm) {
+                if (!Object.prototype.hasOwnProperty.call(result.feature_norm, key)) continue;
+                var data = result.feature_norm[key];
+                var name = FEATURE_NAMES_RU[key] || key;
+                var units = getUnits(key, serverUnits);
+                var val = data.value;
+                var status = data.status || (data.in_norm === true ? 'normal' : 'abnormal');
+
+                var lower = data.lower_bound;
+                var upper = data.upper_bound;
+                var transLow = data.trans_lower_start;
+                var transUp = data.trans_upper_end;
+
+                if (lower === undefined) lower = val !== null ? val * 0.8 : 0;
+                if (upper === undefined) upper = val !== null ? val * 1.2 : 1;
+                if (transLow === undefined) transLow = lower - (upper - lower) * 0.2;
+                if (transUp === undefined) transUp = upper + (upper - lower) * 0.2;
+
+                var minScale = Math.min(transLow * 0.8, val !== null ? val * 0.5 : 0, 0);
+                var maxScale = Math.max(transUp * 1.2, val !== null ? val * 1.5 : 1, 1);
+                var range = maxScale - minScale || 1;
+
+                var greenLeft = ((lower - minScale) / range) * 100;
+                var greenWidth = ((upper - lower) / range) * 100;
+                var transLeftLeft = ((transLow - minScale) / range) * 100;
+                var transLeftWidth = ((lower - transLow) / range) * 100;
+                var transRightLeft = ((upper - minScale) / range) * 100;
+                var transRightWidth = ((transUp - upper) / range) * 100;
+                var markerPercent = val !== null ? ((val - minScale) / range) * 100 : 50;
+                var clampedMarker = Math.max(2, Math.min(98, markerPercent));
+
+                var markerClass = status === 'normal' ? 'normal' : (status === 'transition' ? 'transition' : 'abnormal');
+                var valueClass = status === 'normal' ? 'text-emerald-600' : (status === 'transition' ? 'text-amber-500' : 'text-red-500');
+                var statusClass = status === 'normal' ? 'text-emerald-600' : (status === 'transition' ? 'text-amber-500' : 'text-red-500');
+
+                var valStr = val !== null ? Number(val).toFixed(3) : 'N/A';
+
+                var card = document.createElement('div');
+                card.className = 'feature-card model-feature';
+                card.innerHTML =
+                    '<div class="text-xs text-slate-500 font-semibold mb-1 truncate">' + name + '</div>' +
+                    '<div class="text-lg font-bold mb-1 ' + valueClass + '">' + valStr +
+                    ' <span class="text-xs font-normal text-slate-400">' + units + '</span></div>' +
+                    '<div class="norm-bar">' +
+                    '<div class="zone-transition-left" style="left:' + transLeftLeft + '%;width:' + transLeftWidth + '%"></div>' +
+                    '<div class="green-zone" style="left:' + greenLeft + '%;width:' + greenWidth + '%"></div>' +
+                    '<div class="zone-transition-right" style="left:' + transRightLeft + '%;width:' + transRightWidth + '%"></div>' +
+                    '<div class="marker ' + markerClass + '" style="left:' + clampedMarker + '%"></div>' +
+                    '</div>' +
+                    '<div class="text-[10px] text-slate-500 text-center mt-1.5 font-medium">Норма: ' + Number(lower).toFixed(2) + ' – ' + Number(upper).toFixed(2) + ' ' + units + '</div>' +
+                    '<div class="text-[10px] text-center mt-0.5 font-bold ' + statusClass + '">' + (data.message || '') + '</div>';
+                modelGrid.appendChild(card);
+            }
         }
 
-        nav a.active {
-            background-color: #2980b9;
+        if (result.all_features) {
+            document.getElementById('allFeaturesCard').classList.remove('hidden');
+            var allGrid = document.getElementById('allFeaturesGrid');
+            allGrid.innerHTML = '';
+            var serverUnits2 = result.feature_units || {};
+
+            for (var key2 in result.all_features) {
+                if (!Object.prototype.hasOwnProperty.call(result.all_features, key2)) continue;
+                var val2 = result.all_features[key2];
+                var name2 = FEATURE_NAMES_RU[key2] || key2;
+                var units2 = getUnits(key2, serverUnits2);
+                var valStr2 = (val2 !== null && val2 !== undefined) ? Number(val2).toFixed(4) : 'N/A';
+
+                var card2 = document.createElement('div');
+                card2.className = 'feature-card';
+                card2.innerHTML =
+                    '<div class="text-[11px] text-slate-500 font-semibold truncate mb-0.5">' + name2 + '</div>' +
+                    '<div class="text-base font-bold text-blue-600">' + valStr2 +
+                    ' <span class="text-[10px] font-normal text-slate-400">' + units2 + '</span></div>';
+                allGrid.appendChild(card2);
+            }
         }
 
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-            padding: 20px;
-        }
+        updatePlots(result);
+        updateSegmentsPlot(result);
+        document.getElementById('editPointsBtn').classList.remove('hidden');
+    }
 
-        .container {
-            text-align: center;
-            max-width: 900px;
-            width: 100%;
-            padding: 20px;
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-        }
+    function updatePointsDisplay() {
+        var pointsGrid = document.getElementById('pointsGrid');
+        if (!pointsGrid) return;
+        var html = '';
+        var keys = ['T1', 'T2', 'T3', 'T4', 'T5'];
 
-        .menu {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-top: 30px;
-        }
+        for (var i = 0; i < 5; i++) {
+            var k = keys[i];
+            var val = STATE.editMode ? STATE.editablePoints[k] : STATE.currentResult.points[k];
+            var originalVal = STATE.originalPoints ? STATE.originalPoints[k] : null;
+            var changed = originalVal !== null && val !== null && Math.abs(originalVal - val) > 0.01;
+            var isSelected = STATE.selectedPoint === k;
 
-        .menu button {
-            padding: 20px;
-            font-size: 18px;
-            cursor: pointer;
-            border: none;
-            border-radius: 10px;
-            background: #3498db;
-            color: white;
-            transition: background 0.3s;
-        }
+            var borderClass = isSelected ? 'border-purple-500 bg-purple-50 ring-2 ring-purple-300' :
+                (changed ? 'border-amber-400 bg-amber-50' : 'border-slate-200 bg-slate-50');
+            var valStr = (val !== null && val !== undefined) ? Number(val).toFixed(2) : '—';
 
-        .menu button:hover {
-            background: #2980b9;
+            html += '<div class="p-2.5 rounded-lg ' + borderClass + ' border text-center point-card" onclick="selectPoint(\'' + k + '\')">' +
+                '<div class="text-[11px] text-slate-500 mb-0.5">' + POINT_LABELS[k] + '</div>' +
+                '<div class="text-base font-bold text-slate-700">' + valStr + ' с</div>' +
+                (isSelected ? '<div class="text-[10px] text-purple-600 font-semibold mt-0.5">← выбрана</div>' : '') +
+                '</div>';
         }
+        pointsGrid.innerHTML = html;
+    }
 
-        .back-btn {
-            display: none;
-            margin-bottom: 20px;
-            padding: 10px 20px;
-            font-size: 16px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            background: #95a5a6;
-            color: white;
-        }
+    window.selectPoint = function (pointKey) {
+        if (!STATE.editMode) return;
+        STATE.selectedPoint = pointKey;
+        updatePointsDisplay();
+        updatePlotsWithEditablePoints();
+    };
 
-        .video-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin-bottom: 20px;
-        }
+    function updatePlots(result) {
+        if (!result || !result.full_signal || !result.full_signal.time || !result.full_signal.magnitude) return;
+        var timeData = result.full_signal.time;
+        var magnitudeData = result.full_signal.magnitude;
+        if (timeData.length === 0) return;
 
-        video,
-        img {
-            border-radius: 10px;
-            background: #000;
-            max-width: 100%;
-            height: auto;
-            object-fit: cover;
-        }
+        var minMag = Math.min.apply(null, magnitudeData);
+        var maxMag = Math.max.apply(null, magnitudeData);
+        var range = maxMag - minMag || 1;
 
-        .controls {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-            gap: 15px;
-            margin: 20px 0;
-        }
-
-        button {
-            flex: 1 1 auto;
-            min-width: 180px;
-            max-width: 250px;
-            padding: 12px 20px;
-            font-size: 16px;
-            cursor: pointer;
-            border: none;
-            border-radius: 8px;
-            transition: all 0.3s;
-        }
-
-        #startBtn {
-            background: #3498db;
-            color: white;
-        }
-
-        #startBtn:hover {
-            background: #2980b9;
-        }
-
-        #stopBtn {
-            background: #e74c3c;
-            color: white;
-            display: none;
-        }
-
-        #stopBtn:hover {
-            background: #c0392b;
-        }
-
-        #recordBtn {
-            background: #9b59b6;
-            color: white;
-        }
-
-        #recordBtn:hover {
-            background: #8e44ad;
-        }
-
-        #recordBtn.recording {
-            background: #2ecc71;
-        }
-
-        #recordBtn.recording:hover {
-            background: #27ae60;
-        }
-
-        .settings {
-            margin-top: 20px;
-            text-align: left;
-            padding: 15px;
-            background: #f1f3f4;
-            border-radius: 8px;
-        }
-
-        .settings label {
-            display: block;
-            margin-bottom: 8px;
-        }
-
-        .settings input[type="range"] {
-            width: 100%;
-            margin-bottom: 15px;
-        }
-
-        .settings-value {
-            float: right;
-            font-weight: bold;
-        }
-
-        #status {
-            margin-top: 10px;
-            font-size: 18px;
-            color: #007acc;
-        }
-
-        .hiddenVideo {
-            width: 1px !important;
-            height: 1px !important;
-            position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            z-index: -1 !important;
-            background: black !important;
-            object-fit: cover !important;
-            user-select: none !important;
-            pointer-events: none !important;
-        }
-
-        #debugCanvas {
-            max-width: 100%;
-            margin-top: 10px;
-            border: 1px dashed #ccc;
-            display: none;
-        }
-
-        .section {
-            display: none;
-        }
-
-        .section.active {
-            display: block;
-        }
-    </style>
-</head>
-
-<body>
-    <div class="container">
-        <nav>
-            <a href="/hand_tracking" class="active">Двигательная активность рук</a>
-            <a href="/tremor">Тремор</a>
-            <a href="/mimic">Мимика</a>
-            <a href="/voice">Голос</a>
-            <a href="/gait">Походка</a>
-        </nav>
-        <div>
-            <script>
-                // Подсвечиваем активную ссылку в меню
-                document.querySelectorAll("nav a").forEach(link => {
-                    if (link.getAttribute("href") === window.location.pathname) {
-                        link.classList.add("active");
-                    } else {
-                        link.classList.remove("active");
-                    }
+        var shapes = [];
+        ['T1', 'T2', 'T3', 'T4', 'T5'].forEach(function (point) {
+            var tVal = result.points ? result.points[point] : null;
+            if (tVal !== null && tVal !== undefined) {
+                shapes.push({
+                    type: 'line', x0: tVal, x1: tVal, y0: minMag - range * 0.05, y1: maxMag + range * 0.05,
+                    line: { color: POINT_COLORS[point], width: 2.5, dash: 'dash' }
                 });
-            </script>
+            }
+        });
 
+        if (result.segments) {
+            if (result.segments.segment_1) {
+                shapes.push({
+                    type: 'rect', x0: result.segments.segment_1.start_time, x1: result.segments.segment_1.end_time,
+                    y0: minMag - range * 0.05, y1: maxMag + range * 0.05,
+                    fillcolor: 'rgba(46, 204, 113, 0.15)', line: { width: 0 }
+                });
+            }
+            if (result.segments.segment_2) {
+                shapes.push({
+                    type: 'rect', x0: result.segments.segment_2.start_time, x1: result.segments.segment_2.end_time,
+                    y0: minMag - range * 0.05, y1: maxMag + range * 0.05,
+                    fillcolor: 'rgba(52, 152, 219, 0.15)', line: { width: 0 }
+                });
+            }
+        }
 
-            <body>
+        var pointTraces = [];
+        ['T1', 'T2', 'T3', 'T4', 'T5'].forEach(function (point) {
+            var tVal = result.points ? result.points[point] : null;
+            if (tVal !== null && tVal !== undefined) {
+                var isSelected = STATE.selectedPoint === point;
+                pointTraces.push({
+                    x: [tVal], y: [maxMag + range * 0.03], mode: 'markers+text',
+                    marker: {
+                        color: POINT_COLORS[point], size: isSelected ? 22 : 14,
+                        line: { color: isSelected ? '#a855f7' : 'white', width: isSelected ? 3 : 2 }, symbol: 'circle'
+                    },
+                    text: [point], textposition: 'top center',
+                    textfont: { color: POINT_COLORS[point], size: 11, family: 'Segoe UI', weight: 'bold' },
+                    name: point, hoverinfo: 'text',
+                    hovertext: [POINT_LABELS[point] + ': ' + Number(tVal).toFixed(2) + ' с'],
+                    showlegend: false
+                });
+            }
+        });
 
-</html>
+        var traces = [{
+            x: timeData, y: magnitudeData, mode: 'lines', name: 'Magnitude',
+            line: { color: '#3498db', width: 1.5 }
+        }].concat(pointTraces);
+
+        var layout = {
+            paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: '#f8fafc',
+            font: { color: '#2c3e50', family: 'Segoe UI' },
+            margin: { l: 45, r: 25, t: 25, b: 35 },
+            xaxis: { title: 'Время (с)', gridcolor: '#e2e8f0', range: [0, Math.max.apply(null, timeData)] },
+            yaxis: { title: 'Модуль ускорения (м/с²)', gridcolor: '#e2e8f0', range: [minMag - range * 0.05, maxMag + range * 0.1] },
+            shapes: shapes, showlegend: false, dragmode: 'pan', hovermode: 'closest'
+        };
+
+        Plotly.newPlot('signalPlot', traces, layout, { responsive: true, displayModeBar: true });
+
+        var plotDiv = document.getElementById('signalPlot');
+        plotDiv.removeAllListeners('plotly_click');
+        if (STATE.editMode) plotDiv.on('plotly_click', handlePlotClick);
+    }
+
+    function updateSegmentsPlot(result) {
+        if (!result.segments || !result.segments.segment_1 || !result.segments.segment_2) return;
+        document.getElementById('segmentsCard').classList.remove('hidden');
+        var s1 = result.segments.segment_1, s2 = result.segments.segment_2;
+        Plotly.newPlot('segmentsPlot', [
+            { x: s1.time_data, y: s1.signal_data, mode: 'lines', name: 'Сегмент 1', line: { color: '#2ecc71', width: 2 } },
+            { x: s2.time_data, y: s2.signal_data, mode: 'lines', name: 'Сегмент 2', line: { color: '#3498db', width: 2 } }
+        ], {
+            paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: '#f8fafc',
+            font: { color: '#2c3e50', family: 'Segoe UI' },
+            margin: { l: 45, r: 25, t: 25, b: 35 },
+            xaxis: { title: 'Время (с)', gridcolor: '#e2e8f0' },
+            yaxis: { title: 'Magnitude', gridcolor: '#e2e8f0' },
+            legend: { bgcolor: 'rgba(0,0,0,0)', x: 0, y: 1 }
+        }, { responsive: true, displayModeBar: false });
+    }
+
+    document.getElementById('editPointsBtn').onclick = function () {
+        if (!STATE.currentResult || !STATE.currentResult.points) return;
+        STATE.editMode = true;
+        STATE.originalPoints = JSON.parse(JSON.stringify(STATE.currentResult.points));
+        STATE.editablePoints = JSON.parse(JSON.stringify(STATE.currentResult.points));
+        STATE.selectedPoint = null;
+
+        document.getElementById('editPointsBtn').classList.add('active');
+        document.getElementById('savePointsBtn').classList.remove('hidden');
+        document.getElementById('cancelEditBtn').classList.remove('hidden');
+        document.getElementById('editBanner').classList.remove('hidden');
+        document.getElementById('editHint').textContent = 'Выберите маркер и укажите новое время';
+
+        updatePointsDisplay();
+        updatePlots(STATE.currentResult);
+    };
+
+    document.getElementById('cancelEditBtn').onclick = function () {
+        STATE.editMode = false;
+        STATE.selectedPoint = null;
+
+        document.getElementById('editPointsBtn').classList.remove('active');
+        document.getElementById('savePointsBtn').classList.add('hidden');
+        document.getElementById('cancelEditBtn').classList.add('hidden');
+        document.getElementById('editBanner').classList.add('hidden');
+        document.getElementById('editHint').textContent = 'Нажмите «Редактировать» для изменения';
+
+        updatePointsDisplay();
+        updatePlots(STATE.currentResult);
+    };
+
+    document.getElementById('savePointsBtn').onclick = async function () {
+        STATE.editMode = false;
+        STATE.selectedPoint = null;
+
+        document.getElementById('editPointsBtn').classList.remove('active');
+        document.getElementById('savePointsBtn').classList.add('hidden');
+        document.getElementById('cancelEditBtn').classList.add('hidden');
+        document.getElementById('editBanner').classList.add('hidden');
+
+        document.getElementById('progressContainer').classList.remove('hidden');
+        document.getElementById('progressLabel').textContent = 'Перерасчет параметров...';
+        document.getElementById('progressPercent').textContent = '50%';
+        document.getElementById('progressBar').style.width = '50%';
+
+        try {
+            var response = await fetch(API_URL + '/api/recalculate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ points: STATE.editablePoints })
+            });
+
+            if (!response.ok) throw new Error('HTTP ' + response.status + ': ' + await response.text());
+            var result = await response.json();
+            STATE.currentResult = result;
+            displayResults(result);
+
+            document.getElementById('progressBar').style.width = '100%';
+        } catch (err) {
+            alert('Ошибка перерасчета: ' + err.message);
+        }
+    };
+
+    function handlePlotClick(eventData) {
+        if (!STATE.editMode || !eventData || !eventData.points || eventData.points.length === 0) return;
+        var clickedPoint = eventData.points[0];
+        var clickX = clickedPoint.x;
+        var curveNumber = clickedPoint.curveNumber;
+        if (clickX === undefined || clickX === null) return;
+
+        if (curveNumber > 0 && clickedPoint.pointNumber === 0) {
+            var pointKeys = ['T1', 'T2', 'T3', 'T4', 'T5'];
+            var selectedKey = pointKeys[curveNumber - 1];
+            if (selectedKey && STATE.editablePoints[selectedKey] !== null) {
+                STATE.selectedPoint = selectedKey;
+                updatePointsDisplay();
+                updatePlotsWithEditablePoints();
+            }
+        } else {
+            if (STATE.selectedPoint) {
+                STATE.editablePoints[STATE.selectedPoint] = clickX;
+
+                var sorted = [];
+                for (var key in STATE.editablePoints) {
+                    if (Object.prototype.hasOwnProperty.call(STATE.editablePoints, key) && STATE.editablePoints[key] !== null)
+                        sorted.push({ key: key, val: STATE.editablePoints[key] });
+                }
+                sorted.sort(function (a, b) { return a.val - b.val; });
+
+                var newPoints = { T1: null, T2: null, T3: null, T4: null, T5: null };
+                var order = ['T1', 'T2', 'T3', 'T4', 'T5'];
+                for (var i = 0; i < Math.min(sorted.length, 5); i++) newPoints[order[i]] = sorted[i].val;
+
+                STATE.editablePoints = newPoints;
+                STATE.selectedPoint = null;
+                updatePointsDisplay();
+                updatePlotsWithEditablePoints();
+            }
+        }
+    }
+
+    function updatePlotsWithEditablePoints() {
+        var tempResult = JSON.parse(JSON.stringify(STATE.currentResult));
+        tempResult.points = STATE.editablePoints;
+        updatePlots(tempResult);
+    }
+
+    checkModelsStatus();
+
+    Plotly.newPlot('signalPlot', [], {
+        paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: '#f8fafc',
+        font: { color: '#94a3b8', family: 'Segoe UI' },
+        xaxis: { title: 'Время (с)', gridcolor: '#e2e8f0' },
+        yaxis: { title: 'Модуль ускорения (м/с²)', gridcolor: '#e2e8f0' },
+        annotations: [{ text: 'Загрузите данные и нажмите «Запустить анализ»', showarrow: false, xref: 'paper', yref: 'paper', x: 0.5, y: 0.5, font: { size: 14, color: '#94a3b8' } }]
+    }, { responsive: true, displayModeBar: false });
+</script>
+{% endblock %}
