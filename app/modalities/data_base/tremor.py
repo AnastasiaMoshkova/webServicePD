@@ -228,12 +228,12 @@ class TremorProcessing:
     def _calculate_features(self, X, Y, Z, frame, f1, f2, quality):
 
         if ((len(X)==0) | (quality == 0)):
-            return {'Fmean': np.NaN,
-                    'Amean': np.NaN,
-                    'Fmax': np.NaN,
-                    'Amax': np.NaN,
-                    'PWmean': np.NaN,
-                    'PWmax': np.NaN,
+            return {'Fmean': np.nan,
+                    'Amean': np.nan,
+                    'Fmax': np.nan,
+                    'Amax': np.nan,
+                    'PWmean': np.nan,
+                    'PWmax': np.nan,
                     }
 
         Xfiltered = self.butter_bandpass_filter(X, f1, f2, 1 / (frame[1] - frame[0]), order=5)

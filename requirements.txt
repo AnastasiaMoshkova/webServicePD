@@ -13,3 +13,10 @@ requests==2.31.0
 pandas==2.2.3
 statsmodels==0.14.2
 scipy==1.13.1
+matplotlib==3.8.2
+scikit-learn==1.7.2
+joblib==1.4.2
+shap==0.51.0
+lightgbm==4.3.0
+xgboost==2.0.3
+torch==2.5.1

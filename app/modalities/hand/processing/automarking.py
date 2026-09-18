@@ -10,8 +10,8 @@ import shutil
 # from pprint import pprint
 # import matplotlib.pyplot as plt
 # from matplotlib.pyplot import figure
-from data_base.hand2D import HandDataAngle
-from hand_processing.adaptive import Adaptive
+from app.modalities.data_base.hand2D import HandDataAngle
+from app.modalities.hand.processing.adaptive import Adaptive
 import re
 import logging
 
@@ -121,43 +121,48 @@ class AutoMarking:
         values, frames, palm_width = signal_class.signal_hand(
             input_file, exercise_dict[exercise], hand
         )  # FIXME
-        if len(values) > 50:  # FIXME config
-
-            maxP, minP, maxA, minA, frames, values = self.auto_point_hand(values, frames, fps)
-
-            if False:  # FIXME save peacture config
-                output_dir = os.path.join(path_to_dir, "images")
-                if not os.path.isdir(output_dir):
-                    os.mkdir(output_dir)
-                path_to_save_image = os.path.join(
-                    output_dir,
-                    "signal_picture.png",
-                )
-                signal_class.plot_image(
-                    values,
-                    frames,
-                    maxP,
-                    minP,
-                    maxA,
-                    minA,
-                    path_to_save_image,
-                    "",
-                )
-            self.write_point_hand(
-                folder_to_save,
-                maxP,
-                minP,
-                maxA,
-                minA,
+        if len(values) <= 50:  # FIXME config
+            raise ValueError(
+                f"Недостаточно распознанных кадров с рукой для анализа ({len(values)} из "
+                f"минимум 50) — запись слишком короткая или рука часто выпадала из кадра. "
+                f"Запишите упражнение заново, подольше и без потери руки из виду."
             )
-            return (
-                maxP,
-                minP,
-                maxA,
-                minA,
+
+        maxP, minP, maxA, minA, frames, values = self.auto_point_hand(values, frames, fps)
+
+        if False:  # FIXME save peacture config
+            output_dir = os.path.join(path_to_dir, "images")
+            if not os.path.isdir(output_dir):
+                os.mkdir(output_dir)
+            path_to_save_image = os.path.join(
+                output_dir,
+                "signal_picture.png",
+            )
+            signal_class.plot_image(
                 values,
                 frames,
+                maxP,
+                minP,
+                maxA,
+                minA,
+                path_to_save_image,
+                "",
             )
+        self.write_point_hand(
+            folder_to_save,
+            maxP,
+            minP,
+            maxA,
+            minA,
+        )
+        return (
+            maxP,
+            minP,
+            maxA,
+            minA,
+            values,
+            frames,
+        )
 
     def processing(self, path_to_dir, exercise, fps, hand):
         return self.hand_processing_auto_point(path_to_dir, hand, exercise, fps)
