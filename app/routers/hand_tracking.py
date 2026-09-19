@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 import app.routers.utils.HandTrackingModule as htm
 from app.modalities.hand.service import HandTrackingService
+from core.session import get_or_create_session_id, get_session_id_from_websocket, read_or_new_session_id, set_session_cookie
 from core.templates import templates
 
 logging.basicConfig(level=logging.INFO)
@@ -32,15 +33,24 @@ async def hand_tracking_redirect():
 
 @router.get("/hand_tracking")
 def home(request: Request):
-    return templates.TemplateResponse("hand_tracking.html", {"request": request})
+    response = templates.TemplateResponse("hand_tracking.html", {"request": request})
+    get_or_create_session_id(request, response)
+    return response
 
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    service.reset_local_dir()
+    session_id = get_session_id_from_websocket(websocket)
+    service.reset_local_dir(session_id)
     await websocket.accept()
-    logger.info("WebSocket подключен")
+    logger.info("WebSocket подключен (session=%s)", session_id)
     detector = htm.handDetector(detectionCon=0.7)
+    frame_count = 0
+    # MediaPipe Hands на кадр ~100+ мс — заметно дольше, чем интервал между
+    # кадрами с камеры. Клиент теперь ждёт ответа на каждый отправленный кадр
+    # (ack-based throttling, см. static/js/hand_tracking.js), поэтому здесь
+    # отвечаем на каждый обработанный кадр — темп естественно ограничивается
+    # реальной скоростью обработки, без искусственного пропуска кадров.
 
     try:
         while True:
@@ -52,6 +62,7 @@ async def websocket_endpoint(websocket: WebSocket):
             if not data:
                 continue
 
+            frame_count += 1
             np_arr = np.frombuffer(data, np.uint8)
             if np_arr.size == 0:
                 logger.error("Пустой numpy массив")
@@ -63,19 +74,20 @@ async def websocket_endpoint(websocket: WebSocket):
 
             # Обработка через MediaPipe
             frame = detector.findHands(frame_orig.copy())
-            if service.recording:
+            s = service.get_session(session_id)
+            if s["recording"]:
                 # инициализация записи
-                if service.out is None:
-                    service.init_writer(frame_orig.shape)
+                if s["out"] is None:
+                    service.init_writer(session_id, frame_orig.shape)
 
                 # вычисляем, сколько осталось секунд
-                if service.start_time and service.countdown_time:
-                    elapsed = (datetime.now() - service.start_time).total_seconds()
-                    remaining = int(service.countdown_time - elapsed)
+                if s["start_time"] and s["countdown_time"]:
+                    elapsed = (datetime.now() - s["start_time"]).total_seconds()
+                    remaining = int(s["countdown_time"] - elapsed)
 
                     # если время вышло — автоостановка
                     if remaining <= 0:
-                        service.stop_record(clear_output=False)
+                        service.stop_record(session_id, clear_output=False)
                         remaining = 0
                         try:
                             await websocket.send_json(
@@ -97,16 +109,15 @@ async def websocket_endpoint(websocket: WebSocket):
                     )
 
                 # записываем только если out реально открыт
-                if service.out is not None:
+                if s["out"] is not None:
                     try:
-                        service.out.write(frame_orig)
+                        s["out"].write(frame_orig)
                     except Exception as e:
                         print("Ошибка записи кадра:", e)
 
             success, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 45])
             if not success:
                 continue
-
             await websocket.send_bytes(buffer.tobytes())
 
     except WebSocketDisconnect:
@@ -114,24 +125,30 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         print(f"Ошибка в WebSocket: {e}")
     finally:
-        service.stop_record(clear_output=False)
+        service.stop_record(session_id, clear_output=False)
 
 
 @router.post("/start_record")
-async def start_record(duration: int = 20):  # по умолчанию 20 секунд
+async def start_record(request: Request, duration: int = 20):  # по умолчанию 20 секунд
     """Запуск записи с обратным отсчётом"""
-    if service.recording:
-        return JSONResponse({"status": "already recording"})
-    service.start_record(duration)
-
-    return JSONResponse({"status": "started", "duration": duration})
+    session_id = read_or_new_session_id(request)
+    if service.get_session(session_id)["recording"]:
+        resp = JSONResponse({"status": "already recording"})
+    else:
+        service.start_record(session_id, duration)
+        resp = JSONResponse({"status": "started", "duration": duration})
+    set_session_cookie(resp, session_id)
+    return resp
 
 
 @router.post("/stop_record")
-async def stop_record():
+async def stop_record(request: Request):
     """Остановка записи"""
-    saved_file = service.stop_record(clear_output=True)
-    return JSONResponse({"status": "stopped", "saved_file": saved_file})
+    session_id = read_or_new_session_id(request)
+    saved_file = service.stop_record(session_id, clear_output=True)
+    resp = JSONResponse({"status": "stopped", "saved_file": saved_file})
+    set_session_cookie(resp, session_id)
+    return resp
 
 
 @router.post("/predict_binary")
@@ -144,26 +161,39 @@ async def predict_binary(payload: Dict[str, Any] = Body(...)):
 
 
 @router.post("/upload")
-async def upload(
-    file: UploadFile = File(...),
-):
+async def upload(request: Request, file: UploadFile = File(...)):
+    session_id = read_or_new_session_id(request)
     try:
         content = await file.read()
-        result = service.upload(file.filename, content)
-        return JSONResponse(content=result)
+        result = service.upload(session_id, file.filename, content)
+        resp = JSONResponse(content=result)
     except ValueError as e:
-        return JSONResponse(status_code=400, content={"status": "error", "message": str(e)})
+        resp = JSONResponse(status_code=400, content={"status": "error", "message": str(e)})
     except Exception as e:
-        return JSONResponse(
+        resp = JSONResponse(
             status_code=500,
             content={"status": "error", "message": f"Failed to upload file: {str(e)}"},
         )
+    set_session_cookie(resp, session_id)
+    return resp
 
 
 @router.post("/raw_data_processing")
-async def raw_data_processing(experiment_info: RawDataRequest):
-    result = service.raw_data_processing(experiment_info.model_dump())
-    return JSONResponse(content=result)
+async def raw_data_processing(request: Request, experiment_info: RawDataRequest):
+    session_id = read_or_new_session_id(request)
+    try:
+        result = service.raw_data_processing(session_id, experiment_info.model_dump())
+        resp = JSONResponse(content=result)
+    except ValueError as e:
+        resp = JSONResponse(status_code=400, content={"status": "error", "message": str(e)})
+    except Exception as e:
+        logger.exception("Ошибка обработки данных руки")
+        resp = JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": f"Ошибка обработки: {e}"},
+        )
+    set_session_cookie(resp, session_id)
+    return resp
 
 
 @router.post("/insert_in_db")

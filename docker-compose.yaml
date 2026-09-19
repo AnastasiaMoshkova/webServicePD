@@ -9,10 +9,17 @@ services:
     container_name: pd_web
     ports:
       - "8000:8000"
+    environment:
+      # Этот compose-файл (без nginx) не терминирует TLS — приложение доступно
+      # напрямую по http://localhost:8000. Редирект на https сломал бы такой
+      # доступ, поэтому здесь он выключен. При деплое за nginx с сертификатом
+      # (docker-compose_nginx.yaml) выставить HTTPS_REDIRECT=1.
+      - HTTPS_REDIRECT=0
     volumes:
-      - ./configs:/app/configs
-      - ./routers:/app/routers
+      - ./app:/app/app
+      - ./core:/app/core
       - ./static:/app/static
+      - ./templates:/app/templates
     networks:
       webservicepd_pd_web_net:
         aliases:

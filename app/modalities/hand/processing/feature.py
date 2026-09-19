@@ -412,7 +412,7 @@ class DecLin(Feature):
         maxPointX, maxPointY, minPointX, minPointY = self.loadfileInterval_hand(self.datapoint, start, stop)
         """
         if len(self.maxPointX) < 2:
-            return np.NaN
+            return np.nan
         else:
             coef = np.polyfit(self.maxPointX, self.maxPointY, 1)
             return coef[0]
