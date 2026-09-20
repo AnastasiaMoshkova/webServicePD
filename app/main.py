@@ -5,7 +5,6 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
-
 app = FastAPI()
 
 # Перенаправление всех HTTP запросов на HTTPS.
