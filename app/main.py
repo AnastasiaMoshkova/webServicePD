@@ -5,7 +5,6 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
-from app.modalities.gait.service import GaitService
 app = FastAPI()
 
 # Перенаправление всех HTTP запросов на HTTPS.
@@ -20,10 +19,6 @@ if os.getenv("HTTPS_REDIRECT", "1") != "0":
 # тела запроса не было. Если лимит нужен, добавлять через отдельный middleware.
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
-MODELS_DIR = os.path.join(os.path.dirname(__file__), "modalities", "gait", "models")
-gait_service_instance = GaitService(models_dir=MODELS_DIR)
-gait_service_instance.load_artifacts()
 
 # Подключаем роуты
 app.include_router(tremor.router)
