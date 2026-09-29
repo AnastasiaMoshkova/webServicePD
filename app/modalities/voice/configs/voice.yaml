@@ -1,0 +1,36 @@
+model:
+  weights_paths:
+    - "app/modalities/voice/models/final_cv_fold_1/best.pt"
+    - "app/modalities/voice/models/final_cv_fold_2/best.pt"
+    - "app/modalities/voice/models/final_cv_fold_3/best.pt"
+    - "app/modalities/voice/models/final_cv_fold_4/best.pt"
+
+  threshold: 0.5
+  device: null
+
+  architecture:
+    dropout: 0.3
+    unfreeze_from: "layer4"
+    gradual_unfreeze: false
+    init_mode: "custom"
+    pretrained_backbone: false
+
+storage:
+  results_dir: "results/voice"
+  spectrogram_web_dir: "static/results/voice"
+  spectrogram_web_url_prefix: "/static/results/voice"
+  recordings_dir: "recordings/voice"
+
+exercises:
+  - value: "a"
+    label: "Протяжная гласная /а/"
+    trained: true
+    recommended_duration_sec: 5
+  - value: "phrase"
+    label: "Чтение фразы (beta)"
+    trained: false
+    recommended_duration_sec: 10
+  - value: "patak"
+    label: "Повторение слогов па-та-ка (beta)"
+    trained: false
+    recommended_duration_sec: 10
