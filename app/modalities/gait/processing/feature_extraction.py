@@ -262,8 +262,6 @@ def compute_all_segment_features(segment_df: pd.DataFrame) -> Dict[str, Any]:
     
     normalized_cycles = []
     if len(peaks) >= 3:
-        # Peaks are indices inside the current segment. Using absolute time_sec here
-        # would shift cycles whenever the segment starts after t=0.
         for i in range(len(peaks) - 2):
             start_idx, end_idx = int(peaks[i]), int(peaks[i + 2])
             cycle_data = norm_mag[start_idx:end_idx + 1]

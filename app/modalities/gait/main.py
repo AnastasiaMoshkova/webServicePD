@@ -1,7 +1,5 @@
-"""Standalone gait API entry point for local debugging.
-
-The production website starts from app.main:app. This module remains usable for
-isolated gait API checks without duplicating model-loading logic.
+"""Автономная точка входа в gait API для локальной отладки.
+Рабочий сайт запускается из app.main:app.
 """
 from fastapi import FastAPI
 

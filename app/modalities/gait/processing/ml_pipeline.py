@@ -1,27 +1,27 @@
 import numpy as np
-from typing import Dict, Any
+from typing import Any, Dict, List
 
-MODEL_FEATURE_NAMES = [
-    'cadence', 
-    'sample_entropy', 
-    'freeze_index_mean',
-    'step_time_cv', 
-    'X_std', 
-    'X_rms', 
-    'X_jerk_std'
-]
+def classify_features(
+    features: Dict[str, Any],
+    feature_names: List[str],
+    clf_model: Any,
+    clf_scaler: Any,
+    missing_value: float = 0.0,
+) -> Dict[str, Any]:
+    """Собирает вектор из ``feature_names`` (порядок важен), скалирует и классифицирует.
 
-def classify_features(features: Dict[str, Any], clf_model: Any, clf_scaler: Any) -> Dict[str, Any]:
-    safe_defaults = {
-        'cadence': 0.0, 'sample_entropy': 0.0, 'freeze_index_mean': 0.0,
-        'step_time_cv': 0.0, 'X_std': 0.0, 'X_rms': 0.0, 'X_jerk_std': 0.0
-    }
+    NaN/None в признаке заменяются на ``missing_value``. Если признака нет среди
+    рассчитанных вообще — это ошибка конфига, а не пропуск данных.
+    """
+    missing = [n for n in feature_names if n not in features]
+    if missing:
+        raise ValueError(f"Признаки из конфига не рассчитываются: {missing}")
+
     feature_vec = []
-
-    for name in MODEL_FEATURE_NAMES:
-        val = features.get(name)
-        if val is None or (isinstance(val, float) and np.isnan(val)):
-            val = safe_defaults[name]
+    for name in feature_names:
+        val = features[name]
+        if val is None or (isinstance(val, (float, np.floating)) and np.isnan(val)):
+            val = missing_value
         feature_vec.append(float(val))
 
     feature_vec = np.array(feature_vec, dtype=np.float64).reshape(1, -1)

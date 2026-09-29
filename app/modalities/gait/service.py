@@ -1,5 +1,4 @@
 import io
-import json
 import logging
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
@@ -11,8 +10,9 @@ import torch
 from torch import nn
 
 from app.modalities.base_service import BaseModalityService
+from app.modalities.gait.model_registry import ModelBundle, ModelRegistry
 from app.modalities.gait.processing.feature_extraction import FEATURE_UNITS, compute_all_segment_features
-from app.modalities.gait.processing.ml_pipeline import MODEL_FEATURE_NAMES, check_feature_norm, classify_features, to_python_types
+from app.modalities.gait.processing.ml_pipeline import check_feature_norm, classify_features, to_python_types
 from app.modalities.gait.processing.raw_data_processing import (
     CFG,
     STEP_SIZE_DET,
@@ -31,7 +31,7 @@ _MODELS_DIR = Path(__file__).resolve().parent / "models"
 
 
 class AttentionLSTM(nn.Module):
-    """Architecture matching detector.pth and segmenter.pth state_dicts."""
+    """Архитектура detector.pth и segmenter.pt имеют одинаковый вид."""
 
     def __init__(self, input_size: int = 5, hidden_size: int = 64, num_layers: int = 2, num_classes: int = 2):
         super().__init__()
@@ -58,29 +58,33 @@ class AttentionLSTM(nn.Module):
 
 
 class GaitService(BaseModalityService):
-    """Complete gait pipeline used by the web router."""
+    """Выполнение пайплайна походки в web router."""
 
     def __init__(self, models_dir: Optional[str] = None) -> None:
         self.models_dir = Path(models_dir) if models_dir else _MODELS_DIR
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.classifier = None
-        self.classifier_scaler = None
+        self.registry = ModelRegistry(self.models_dir / "model_versions.yaml", known_features=FEATURE_UNITS)
         self.detector: Optional[AttentionLSTM] = None
         self.detector_scaler = None
         self.segmenter: Optional[AttentionLSTM] = None
         self.segmenter_scaler = None
-        self.feature_bounds: Dict[str, Any] = {}
         self._session_cache: Dict[str, pd.DataFrame] = {}
         self._load_error: Optional[str] = None
         self.load_artifacts()
+
+    def _classifier_bundle(self) -> Optional[ModelBundle]:
+        """Актуальная версия признаков/скалера/классификатора или None, если её ещё нет."""
+        try:
+            return self.registry.refresh()
+        except RuntimeError:
+            return None
 
     @property
     def ready(self) -> bool:
         return all(
             x is not None
             for x in (
-                self.classifier,
-                self.classifier_scaler,
+                self._classifier_bundle(),
                 self.detector,
                 self.detector_scaler,
                 self.segmenter,
@@ -90,8 +94,6 @@ class GaitService(BaseModalityService):
 
     def load_artifacts(self) -> None:
         try:
-            self.classifier = joblib.load(self.models_dir / "classifier.pkl")
-            self.classifier_scaler = joblib.load(self.models_dir / "classifier_scaler.pkl")
             self.detector_scaler = joblib.load(self.models_dir / "detector_scaler.pkl")
             self.segmenter_scaler = joblib.load(self.models_dir / "segmenter_scaler.pkl")
 
@@ -105,26 +107,29 @@ class GaitService(BaseModalityService):
             self.segmenter.load_state_dict(seg_state)
             self.segmenter.eval()
 
-            with open(self.models_dir / "feature_bounds.json", "r", encoding="utf-8") as f:
-                self.feature_bounds = json.load(f)
             self._load_error = None
         except Exception as exc:
             self._load_error = str(exc)
             logger.exception("Failed to load gait artifacts")
 
     def models_status(self) -> Dict[str, Any]:
+        bundle = self._classifier_bundle()
         return {
             "ready": self.ready,
             "device": str(self.device),
             "error": self._load_error,
+            "feature_version": bundle.version if bundle else None,
+            "available_feature_versions": self.registry.available_versions,
+            "model_features": bundle.feature_names if bundle else [],
+            "feature_config_error": self.registry.error,
             "artifacts": {
-                "classifier": self.classifier is not None,
-                "classifier_scaler": self.classifier_scaler is not None,
+                "classifier": bundle is not None,
+                "classifier_scaler": bundle is not None,
                 "detector": self.detector is not None,
                 "detector_scaler": self.detector_scaler is not None,
                 "segmenter": self.segmenter is not None,
                 "segmenter_scaler": self.segmenter_scaler is not None,
-                "feature_bounds": bool(self.feature_bounds),
+                "feature_bounds": bool(bundle and bundle.feature_bounds),
             },
         }
 
@@ -140,14 +145,13 @@ class GaitService(BaseModalityService):
 
     @staticmethod
     def _time_axis(df: pd.DataFrame, sensor_name: str) -> np.ndarray:
-        # Prefer the raw sensor timestamp. For phone exports it is nanoseconds.
         if "time" in df.columns:
             raw = df["time"]
             numeric = pd.to_numeric(raw, errors="coerce")
             if numeric.notna().sum() >= max(2, len(df) // 2):
                 med = float(np.nanmedian(np.abs(numeric.to_numpy(dtype=float))))
                 if med > 1e11:
-                    # Important for gyro/accelerometer phone exports: time is Unix-like ns.
+                    # Важно перевести отсчеты времени gyro/accelerometer в секунды из Unix-like ns.
                     dt_index = pd.to_datetime(numeric, unit="ns", errors="coerce")
                     vals = dt_index.astype("int64", copy=False).to_numpy(dtype=np.float64) / 1e9
                     vals[dt_index.isna().to_numpy()] = np.nan
@@ -187,7 +191,6 @@ class GaitService(BaseModalityService):
         start = max(float(acc.time_abs.iloc[0]), float(gyr.time_abs.iloc[0]))
         end = min(float(acc.time_abs.iloc[-1]), float(gyr.time_abs.iloc[-1]))
         if end <= start:
-            # Some exports reset seconds_elapsed independently. Align starts only in that case.
             acc = acc.copy(); gyr = gyr.copy()
             acc["time_abs"] -= float(acc.time_abs.iloc[0])
             gyr["time_abs"] -= float(gyr.time_abs.iloc[0])
@@ -292,9 +295,12 @@ class GaitService(BaseModalityService):
         f2 = compute_all_segment_features(s2)
         turn_time = ((p["T3"] - p["T2"]) + (p["T5"] - p["T4"])) / 2.0
         features = self._average_features(f1, f2, turn_time)
-        classification = classify_features(features, self.classifier, self.classifier_scaler)
-        model_feature_values = {name: features.get(name) for name in MODEL_FEATURE_NAMES}
-        norm = check_feature_norm(model_feature_values, self.feature_bounds)
+        bundle = self.registry.refresh()
+        classification = classify_features(
+            features, bundle.feature_names, bundle.classifier, bundle.scaler, bundle.missing_value
+        )
+        model_feature_values = {name: features.get(name) for name in bundle.feature_names}
+        norm = check_feature_norm(model_feature_values, bundle.feature_bounds)
 
         def segment_payload(seg: pd.DataFrame, start: float, end: float) -> Dict[str, Any]:
             return {
@@ -306,6 +312,7 @@ class GaitService(BaseModalityService):
 
         result = {
             **classification,
+            "feature_version": bundle.version,
             "points": p,
             "auto_points_complete": bool(auto_points_complete),
             "segments": {
@@ -347,8 +354,7 @@ class GaitService(BaseModalityService):
         auto_complete = all(points[k] is not None for k in ("T1", "T2", "T3", "T4", "T5"))
 
         if not auto_complete:
-            # Keep the automatically found boundaries visible and make the result editable.
-            # Interior missing points are filled only as an explicit provisional fallback.
+            # если точки моделью были не найдены, то они выставляются автоматически
             span = max(move_end - move_start, 0.1)
             fallback = {
                 "T1": move_start,
