@@ -4,4 +4,5 @@
 *.avi
 *.png
 *.json
+!app/modalities/gait/models/feature_bounds.json
 *.pem
