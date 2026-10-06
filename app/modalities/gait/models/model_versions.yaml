@@ -1,0 +1,43 @@
+# Версии вектора признаков походки и соответствующие им модели.
+# Пути — относительно этой папки.
+# Для добавления новой версии модели:
+#   1. положить скалер, классификатор и bounds в models/<версия>/;
+#   2. проверить, что конфиг корректен, добавив блок версии в versions ниже и запустив:
+#        python -m app.modalities.gait.model_registry app/modalities/gait/models/model_versions.yaml
+#   3. поменять active_version — со следующего запроса работает новая модель.
+#   Файлы моделей лучше класть ДО правки active_version (или копировать под
+#   временным именем и переименовывать), чтобы сервис не видел недописанный файл.
+# Имена признаков — из compute_all_segment_features (см. FEATURE_UNITS).
+# ВАЖНО: порядок в features должен совпадать с порядком колонок при обучении.
+
+active_version: v1
+
+missing_value: 0.0
+
+bounds: feature_bounds.json
+
+versions:
+  v1:
+    description: "Исходная модель, 5 признаков"
+    features:
+       - sample_entropy
+       - step_time_mean
+       - X_dominant_freq
+       - Z_dominant_freq
+       - step_count_exact
+    scaler: v1/classifier_scaler.pkl
+    classifier: v1/classifier.pkl
+
+# Шаблон новой версии — раскомментировать и подставить свои файлы/признаки:
+#   v2:
+ #    description: "Переобучение на новых данных, N признаков"
+#     features: 
+#       - 'cadence'
+#       - 'sample_entropy'
+#       - 'freeze_index_mean'
+#       - 'step_time_cv'
+#       - 'X_std'
+#       - 'X_rms'
+#       - 'X_jerk_std'
+#     scaler: v2/classifier_scaler.pkl
+#     classifier: v2/classifier.pkl  
