@@ -26,3 +26,4 @@ soundfile==0.12.1
 pydub==0.25.1
 praat-parselmouth==0.4.4
 PyYAML>=6.0
+torch==2.5.1

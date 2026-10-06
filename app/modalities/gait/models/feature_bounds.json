@@ -1,0 +1,90 @@
+{
+  "cadence": {
+    "lower_bound": 81.5004,
+    "upper_bound": 140.0634,
+    "q25": 103.4615,
+    "q75": 118.1023,
+    "median": 109.0039,
+    "mean": 110.0901
+  },
+  "sample_entropy": {
+    "lower_bound": 0.403,
+    "upper_bound": 0.5307,
+    "q25": 0.4509,
+    "q75": 0.4828,
+    "median": 0.4579,
+    "mean": 0.4644
+  },
+  "freeze_index_mean": {
+    "lower_bound": 0,
+    "upper_bound": 1.2062,
+    "q25": 0.2679,
+    "q75": 0.6432,
+    "median": 0.4876,
+    "mean": 0.5011
+  },
+  "step_time_cv": {
+    "lower_bound": 0,
+    "upper_bound": 0.4023,
+    "q25": 0.0661,
+    "q75": 0.2005,
+    "median": 0.1314,
+    "mean": 0.1406
+  },
+  "X_std": {
+    "lower_bound": 0.1951,
+    "upper_bound": 0.2872,
+    "q25": 0.2296,
+    "q75": 0.2527,
+    "median": 0.2407,
+    "mean": 0.2383
+  },
+  "X_rms": {
+    "lower_bound": 0.4084,
+    "upper_bound": 0.6434,
+    "q25": 0.4965,
+    "q75": 0.5553,
+    "median": 0.5241,
+    "mean": 0.5189
+  },
+  "X_jerk_std": {
+    "lower_bound": 1.4898,
+    "upper_bound": 6.121,
+    "q25": 3.2265,
+    "q75": 4.3843,
+    "median": 3.4781,
+    "mean": 3.8465
+  },
+  "step_time_mean": {
+    "lower_bound": 0.4004,
+    "upper_bound": 0.6895,
+    "q25": 0.5088,
+    "q75": 0.5811,
+    "median": 0.5505,
+    "mean": 0.5547
+  },
+  "X_dominant_freq": {
+    "lower_bound": 1.5391,
+    "upper_bound": 2.3064,
+    "q25": 1.8269,
+    "q75": 2.0187,
+    "median": 1.933,
+    "mean": 1.9471
+  },
+  "Z_dominant_freq": {
+    "lower_bound": 1.4619,
+    "upper_bound": 2.4351,
+    "q25": 1.8269,
+    "q75": 2.0701,
+    "median": 1.933,
+    "mean": 1.9491
+  },
+  "step_count_exact": {
+    "lower_bound": 8.3438,
+    "upper_bound": 19.0938,
+    "q25": 12.375,
+    "q75": 15.0625,
+    "median": 13.375,
+    "mean": 13.5
+  }
+}
