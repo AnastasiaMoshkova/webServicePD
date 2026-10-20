@@ -109,16 +109,10 @@ class VoiceClassifier:
         for model in self.models:
             logit = model(x).flatten()
             fold_probs.append(float(torch.sigmoid(logit).item()))
-        from app.modalities.voice.processing.debug_log import log_event
 
-        log_event(
-            "ensemble_predict",
-            n_models=len(self.models),
-            fold_probs=fold_probs,
-            weights_paths=self.weights_paths,
-            device=str(self.device),
-            torch_version=torch.__version__,
-            cuda_available=torch.cuda.is_available(),
+        logger.info(
+            "ensemble_predict: n_models=%d fold_probs=%s device=%s cuda=%s",
+            len(self.models), fold_probs, self.device, torch.cuda.is_available(),
         )
 
         prob = float(np.mean(fold_probs))

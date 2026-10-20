@@ -69,39 +69,17 @@ class VoiceService(BaseModalityService):
     ) -> dict[str, Any]:
         from app.modalities.voice.processing.features import extract_voice_features
         from app.modalities.voice.processing.three_channel import ThreeChannelConfig, generate_three_channel
-        from app.modalities.voice.processing.debug_log import log_event
-        import sys
 
         os.makedirs(results_dir, exist_ok=True)
         os.makedirs(spec_web_dir, exist_ok=True)
 
         logger.info(f"Processing audio: {audio_path} (exercise={exercise})")
 
-        log_event(
-            "process_start",
-            audio_path=os.path.abspath(audio_path),
-            patient_id=patient_id,
-            exercise=exercise,
-            python=sys.executable,
-            cwd=os.getcwd(),
-        )
-
         y_full, sr_full = librosa.load(audio_path, sr=16000, mono=True)
         if y_full is None or len(y_full) == 0:
             raise ValueError("Empty or unreadable audio")
         duration_sec = float(len(y_full) / sr_full)
         logger.info(f"Loaded: {duration_sec:.2f}s @ {sr_full} Hz")
-
-        log_event(
-            "preprocess_done",
-            sample_rate=int(sr_full),
-            voice_duration=duration_sec,
-            waveform_len=len(y_full),
-            waveform_mean=float(y_full.mean()),
-            waveform_std=float(y_full.std()),
-            waveform_min=float(y_full.min()),
-            waveform_max=float(y_full.max()),
-        )
 
         cleaned_path = os.path.join(os.path.dirname(audio_path), "cleaned.wav")
         sf.write(cleaned_path, y_full, sr_full)
@@ -120,26 +98,8 @@ class VoiceService(BaseModalityService):
         spec_filename = f"{patient_id}_{timestamp}_spec.png"
         spec_path = os.path.join(spec_web_dir, spec_filename)
         model_input = generate_three_channel(audio_path, spec_path, ThreeChannelConfig())
-        log_event(
-            "three_channel_done",
-            shape=list(model_input.shape),
-            dtype=str(model_input.dtype),
-            mean_rgb=[float(model_input[..., i].mean()) for i in range(3)],
-            min_rgb=[int(model_input[..., i].min()) for i in range(3)],
-            max_rgb=[int(model_input[..., i].max()) for i in range(3)],
-            spec_path=spec_path,
-        )
 
         prediction = self.classifier.predict_from_array(model_input)
-        log_event(
-            "prediction_done",
-            probability=prediction["probability"],
-            class_id=prediction["class"],
-            label=prediction["label"],
-            fold_probabilities=prediction["fold_probabilities"],
-            ensemble_size=prediction["ensemble_size"],
-            threshold=prediction["threshold"],
-        )
 
         model_trained_for = ["a"]
         exercise_supported = exercise in model_trained_for
