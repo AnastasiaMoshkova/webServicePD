@@ -1,0 +1,5 @@
+patient_id,retake,probe,reason
+Healthy18,r5,frown,исключена при первом обучении
+Healthy18,r5,smile,исключена при первом обучении
+Patient98,r1,smile,исключена при первом обучении
+Patient99,r1,smile,исключена при первом обучении

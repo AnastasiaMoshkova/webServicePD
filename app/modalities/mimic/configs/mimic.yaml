@@ -1,0 +1,45 @@
+# Модуль «Мимика»: модели и параметры обучения.
+# Этот файл читает и сервис (MimicService), и скрипт переобучения models/train.py.
+
+model:
+  threshold: 0.5            # класс PD, если вероятность > threshold (пробы и fusion)
+  weights_paths:            # от корня проекта; формат — joblib, как читает сервис
+    smile:  "app/modalities/mimic/models/smile_geom_dyn.joblib"
+    brow:   "app/modalities/mimic/models/brow_geom_dyn.joblib"
+    frown:  "app/modalities/mimic/models/frown_dyn.joblib"
+    fusion: "app/modalities/mimic/models/fusion_meta.joblib"
+
+  # Базовая модель каждой пробы: CorrelationFilter → StandardScaler → estimator.
+  # aggregates — какие агрегаты рядов берутся в признаки (пары точек — mimic_features.PAIRS).
+  correlation_threshold: 0.95
+  probes:
+    smile:
+      aggregates: [min_norm, max_norm, mean_norm, median_norm, std_norm,
+                   max_vel_norm, mean_vel_norm, std_vel_norm, max_acc_norm, std_acc_norm]
+      estimator: lightgbm.LGBMClassifier
+      params: {n_estimators: 300, max_depth: 4, learning_rate: 0.1, class_weight: balanced, verbose: -1}
+    brow:
+      aggregates: [min_norm, max_norm, mean_norm, median_norm, std_norm,
+                   max_vel_norm, mean_vel_norm, std_vel_norm, max_acc_norm, std_acc_norm]
+      estimator: xgboost.XGBClassifier
+      params: {n_estimators: 300, max_depth: 4, learning_rate: 0.1, eval_metric: logloss}
+      scale_pos_weight: auto   # = число здоровых / число БП в обучающей выборке
+    frown:
+      aggregates: [max_vel_norm, mean_vel_norm, std_vel_norm, max_acc_norm, std_acc_norm]
+      estimator: sklearn.ensemble.RandomForestClassifier
+      params: {n_estimators: 300, class_weight: balanced, n_jobs: -1}
+
+  # Мета-модель позднего слияния: вход — вероятности PD трёх проб (smile, brow, frown).
+  fusion:
+    estimator: sklearn.linear_model.LogisticRegression
+    params: {C: 1.0, max_iter: 1000, class_weight: balanced}
+
+training:
+  seed: 42                  # random_state фолдов и моделей
+  n_folds: 5                # StratifiedGroupKFold по пациентам (OOF для проб и для мета-модели)
+  retakes: [r0, r1, r2, r3, r4, r5]
+  videos:                   # код видео в имени файла: <код>[_m<N>]_<id>.mp4
+    neutral: p1
+    brow: p3
+    smile: p5
+    frown: p11

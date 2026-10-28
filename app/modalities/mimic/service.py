@@ -1,7 +1,6 @@
 import os
 import json
 import logging
-from pathlib import Path
 from typing import Any, Dict, Optional
 
 import joblib
@@ -10,12 +9,13 @@ import pandas as pd
 
 from app.modalities.base_service import BaseModalityService
 from app.modalities.mimic.processing import raw_data_processing as rdp
+from app.modalities.mimic.processing import mimic_features as mf
+from app.modalities.mimic import models as mimic_models
 from app.modalities.mimic.processing.ml_pipeline import CorrelationFilter  # noqa: F401 (needed for pickle)
 from app.modalities.mimic.processing.shap_explain import explain_prediction
 
 logger = logging.getLogger(__name__)
 
-_MODELS_DIR = Path(__file__).resolve().parent / "models"
 
 # Пары точек, выводимые на график "дистанция от времени" для каждого упражнения.
 TOP_PAIRS = {
@@ -35,12 +35,12 @@ class MimicService(BaseModalityService):
         self.local_dir = local_dir
         os.makedirs(self.local_dir, exist_ok=True)
 
-        self.model_paths = {
-            "smile":  _MODELS_DIR / "smile_geom_dyn.joblib",
-            "brow":   _MODELS_DIR / "brow_geom_dyn.joblib",
-            "frown":  _MODELS_DIR / "frown_dyn.joblib",
-            "fusion": _MODELS_DIR / "fusion_meta.joblib",
-        }
+        # Пути к весам и порог — из configs/mimic.yaml (его же читает models/train.py)
+        self.config = mimic_models.load_config()
+        model_cfg = self.config["model"]
+        self.threshold = float(model_cfg["threshold"])
+        self.model_paths = {name: mimic_models.weights_path(model_cfg, name)
+                            for name in ("smile", "brow", "frown", "fusion")}
         self._models_cache: Dict[str, Any] = {}
 
     # ── модели ────────────────────────────────────────────────────────────
@@ -71,33 +71,36 @@ class MimicService(BaseModalityService):
     def _neutral_ref_path(self, session_id: str) -> str:
         return os.path.join(self._session_dir(session_id), "neutral_ref.json")
 
+    def _neutral_lm_path(self, session_id: str) -> str:
+        return os.path.join(self._session_dir(session_id), "neutral_landmarks.npy")
+
     def _proba_cache_path(self, session_id: str) -> str:
         return os.path.join(self._session_dir(session_id), "proba_cache.json")
 
     # ── нейтральное выражение (эталон нормализации) ─────────────────────
 
     def process_neutral(self, session_id: str, file_path: str) -> Dict[str, Any]:
-        history, fps, best_frame_b64, best_landmarks, quality = \
-            rdp.collect_pair_history(file_path, "neutral_all")
-        if not history:
+        lm, fps, best_frame_b64, best_landmarks, quality = rdp.collect_landmarks(file_path)
+        n_frames = int(mf.valid_frames(lm).sum())
+        if n_frames == 0:
             return {"status": "error", "message": "Лицо не распознано на видео."}
-
-        pair_means = {k: float(np.mean(v)) for k, v in history.items() if v}
-        n_frames   = len(next(iter(history.values())))
 
         # Новая нейтраль в этой сессии — сбрасываем кэш вероятностей предыдущей
         proba_cache_path = self._proba_cache_path(session_id)
         if os.path.exists(proba_cache_path):
             os.remove(proba_cache_path)
+        # Храним ключевые точки нейтрали целиком: эталон для каждой пробы считается
+        # по своим правилам (улыбка — среднее, брови/нахмуривание — медиана без морганий)
+        np.save(self._neutral_lm_path(session_id), lm)
         with open(self._neutral_ref_path(session_id), "w") as f:
-            json.dump({"pair_means": pair_means, "n_frames": n_frames, "fps": fps}, f)
+            json.dump({"n_frames": n_frames, "fps": fps}, f)
 
         return {
             "status": "success",
             "kind": "neutral_ready",
             "n_frames": n_frames,
             "fps": fps,
-            "pairs_detected": len(pair_means),
+            "pairs_detected": sum(len(v) for v in mf.PAIRS.values()),
             "best_frame": best_frame_b64,
             "best_landmarks": best_landmarks,
             "quality": rdp.quality_level(quality, n_frames),
@@ -115,17 +118,15 @@ class MimicService(BaseModalityService):
                            f"Доступно: smile, brows_up, frown.",
             }
 
-        neutral_ref_path = self._neutral_ref_path(session_id)
-        if not os.path.exists(neutral_ref_path):
+        neutral_lm_path = self._neutral_lm_path(session_id)
+        if not os.path.exists(neutral_lm_path):
             return {"status": "error", "message": "Сначала обработайте нейтральное выражение."}
+        lm_neu = np.load(neutral_lm_path)
 
-        with open(neutral_ref_path) as f:
-            ref = json.load(f)
-        pair_means = ref["pair_means"]
-
-        history, fps, best_frame_b64, best_landmarks, quality = \
-            rdp.collect_pair_history(file_path, exercise_type)
-        if not history:
+        lm, fps, best_frame_b64, best_landmarks, quality = \
+            rdp.collect_landmarks(file_path, probe=model_name)
+        n_face = int(mf.valid_frames(lm).sum())
+        if n_face == 0:
             return {"status": "error", "message": "Лицо не распознано на видео."}
 
         model_blob      = self._get_model(model_name)
@@ -133,30 +134,31 @@ class MimicService(BaseModalityService):
         feature_columns = model_blob["feature_columns"]
         feat_stats      = model_blob.get("feature_stats", {})
 
-        normalized_series = {}
-        for pair_key, vals in history.items():
-            ref_mean = pair_means.get(pair_key)
-            if ref_mean and ref_mean > 0:
-                normalized_series[pair_key] = (np.array(vals) / ref_mean).tolist()
-
-        feature_row, missing = rdp.build_feature_row(normalized_series, feature_columns)
-        feat_df = pd.DataFrame([feature_row], columns=feature_columns)
+        # автообрезка активного фрагмента → нормировка на нейтраль → агрегаты
+        window = mf.auto_window_probe(lm, lm_neu, model_name)
+        feature_row = mf.probe_features(lm, lm_neu, model_name, window)
+        missing = [c for c in feature_columns if c not in feature_row]
+        feat_df = pd.DataFrame([{c: feature_row.get(c, 0.0) for c in feature_columns}], columns=feature_columns)
 
         proba         = pipe.predict_proba(feat_df)[0]
-        pred          = int(pipe.predict(feat_df)[0])
         proba_healthy = float(proba[0])
         proba_pd      = float(proba[1])
+        pred          = int(proba_pd > self.threshold)
         max_proba     = max(proba_pd, proba_healthy)
         confidence    = "high" if max_proba >= 0.75 else "moderate" if max_proba >= 0.60 else "low"
 
-        n_frames = len(next(iter(history.values())))
-        times    = (np.arange(n_frames) / fps).tolist()
+        # График — по кадрам с лицом всего видео; окно автообрезки отдаём отдельно
+        frames = np.where(mf.valid_frames(lm))[0]
+        lm_face = lm[frames]
+        n_frames = int(feature_row["num_frames"])
+        times    = (frames / fps).tolist()
+        ref = mf.neutral_ref(lm_neu, model_name)
 
         chart_series = {}
         for pk in TOP_PAIRS.get(exercise_type, []):
-            if pk in normalized_series:
-                chart_series[f"dist_{pk.replace('-', '_')}"] = \
-                    rdp.rolling_median(normalized_series[pk], window=5)
+            if pk in ref:
+                series = mf.pair_series(lm_face, pk) / ref[pk]
+                chart_series[f"dist_{pk.replace('-', '_')}"] = rdp.rolling_median(series, window=5)
 
         try:
             explanation = explain_prediction(pipe, feature_columns, feat_df,
@@ -179,7 +181,8 @@ class MimicService(BaseModalityService):
                 "max_proba": max_proba,
                 "confidence_level": confidence,
             },
-            "chart": {"times": times, "series": chart_series},
+            "chart": {"times": times, "series": chart_series,
+                      "window": [window[0] / fps, window[1] / fps] if window else None},
             "best_frame": best_frame_b64,
             "best_landmarks": best_landmarks,
             "n_frames": n_frames,
@@ -204,10 +207,10 @@ class MimicService(BaseModalityService):
     def process_fusion(self, proba_smile: float, proba_brow: float, proba_frown: float) -> Dict[str, Any]:
         meta   = self._get_model("fusion")
         X_meta = pd.DataFrame([[proba_smile, proba_brow, proba_frown]],
-                               columns=["smile", "brow", "frown"])
+                               columns=mimic_models.FUSION_INPUTS)
         proba_pd      = float(meta.predict_proba(X_meta)[0, 1])
         proba_healthy = 1.0 - proba_pd
-        pred          = int(meta.predict(X_meta)[0])
+        pred          = int(proba_pd > self.threshold)
         max_proba     = max(proba_pd, proba_healthy)
         confidence    = "high" if max_proba >= 0.75 else "moderate" if max_proba >= 0.60 else "low"
         return {

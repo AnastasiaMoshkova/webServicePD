@@ -1,4 +1,5 @@
 import base64
+import math
 from collections import defaultdict
 
 import cv2
@@ -167,3 +168,67 @@ def collect_pair_history(file_path, exercise_type):
         "detection_rate": (face_frames / total_frames) if total_frames else 0.0,
     }
     return history, fps, best_frame_b64, best_landmarks, quality
+
+
+# ── трекинг для mimic_features ────────────────────────────────────────────────
+
+def collect_landmarks(file_path, probe=None):
+    """
+    Прогоняет видео через FaceMesh
+    (refine_landmarks=True, confidence 0.5).
+    Возвращает:
+      lm: np.ndarray [n_кадров, n_точек, 3] по точкам mimic_features.ALL_POINTS,
+          кадры без лица — NaN (номер кадра сохраняется для автообрезки);
+      fps, best_frame_b64, best_landmarks, quality
+    probe — 'smile' | 'brow' | 'frown' | None (нейтраль): по парам этой пробы выбирается
+    кадр-превью (максимум среднего нормированного расстояния, как в collect_pair_history).
+    """
+    from app.modalities.mimic.processing.mimic_features import ALL_POINTS, PAIRS, EYE_POINTS, split_pair
+
+    score_pairs = [split_pair(p) for p in (PAIRS[probe] if probe else sum(PAIRS.values(), []))]
+    eye_a, eye_b = EYE_POINTS
+
+    cap = cv2.VideoCapture(file_path)
+    fps = cap.get(cv2.CAP_PROP_FPS) or 20.0
+    face_mesh = mp_face_mesh.FaceMesh(
+        static_image_mode=False,
+        max_num_faces=1,
+        refine_landmarks=True,
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5,
+    )
+    nan_row = [(np.nan, np.nan, np.nan)] * len(ALL_POINTS)
+    frames = []
+    best_score, best_frame_b64, best_landmarks = -1.0, None, []
+    total_frames = face_frames = 0
+
+    while cap.isOpened():
+        ok, image = cap.read()
+        if not ok:
+            break
+        total_frames += 1
+        results = face_mesh.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+        if not results.multi_face_landmarks:
+            frames.append(nan_row)
+            continue
+        face_frames += 1
+        lm = results.multi_face_landmarks[0].landmark
+        frames.append([(lm[i].x, lm[i].y, lm[i].z) for i in ALL_POINTS])
+        eye = math.dist((lm[eye_a].x, lm[eye_a].y, lm[eye_a].z), (lm[eye_b].x, lm[eye_b].y, lm[eye_b].z)) or 1.0
+        score = float(np.mean([math.dist((lm[i].x, lm[i].y, lm[i].z), (lm[j].x, lm[j].y, lm[j].z))
+                               for i, j in score_pairs])) / eye
+        if score > best_score:
+            best_score = score
+            best_frame_b64 = im_2_b64(image)
+            h, w, _ = image.shape
+            best_landmarks = [[p.x * w, p.y * h] for p in lm]
+
+    cap.release()
+    face_mesh.close()
+    quality = {
+        "total_frames":   total_frames,
+        "face_frames":    face_frames,
+        "detection_rate": (face_frames / total_frames) if total_frames else 0.0,
+    }
+    lm_arr = np.asarray(frames, dtype=np.float32).reshape(-1, len(ALL_POINTS), 3)
+    return lm_arr, fps, best_frame_b64, best_landmarks, quality
