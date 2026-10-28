@@ -1,0 +1,65 @@
+model:
+  weights_paths:
+    - "app/modalities/voice/models/final_cv_fold_1/best.pt"
+    - "app/modalities/voice/models/final_cv_fold_2/best.pt"
+    - "app/modalities/voice/models/final_cv_fold_3/best.pt"
+    - "app/modalities/voice/models/final_cv_fold_4/best.pt"
+  threshold: 0.5
+  device: null
+  architecture:
+    dropout: 0.3
+    unfreeze_from: "layer4"
+    gradual_unfreeze: false
+    init_mode: "custom"
+    pretrained_backbone: true
+
+training:
+  seed: 42
+  n_folds: 4
+  epochs: 100
+  patience: 50
+  batch_size: 8
+  lr: 0.01
+  optimizer: AdamW
+  weight_decay: 0.0001
+  grad_clip_norm: 1.0
+  scheduler:
+    type: ReduceLROnPlateau
+    mode: max
+    factor: 0.5
+    patience: 5
+    monitor: val_balanced_accuracy
+  early_stopping:
+    monitor: val_balanced_accuracy
+    mode: max
+    patience: 50
+  loss:
+    type: BCEWithLogitsLoss
+    pos_weight: computed_from_train_labels
+  augmentation: none
+  num_workers: 0
+  invariance:
+    enabled: true
+    targets: ["sex"]
+    lambdas: {"sex": 0.25}
+    disc_lr: 0.00001
+    start_epoch: 10
+
+data:
+  excel_path: "data/datasets_a_all.xlsx"
+  excel_sheet: "Лист1"
+  flat_audio_dir: "data/raw_flat"
+  filter_name_dataset: "BMSTU_dataset"
+  filter_device: null
+  filter_exercise: "a"
+  type: three_channel
+  sample_rate: 16000
+  segment_skip_sec: 0.5
+  segment_duration_sec: 1.5
+  img_size: 224
+  channels: [mel, chroma, mfcc]
+  n_mels: 128
+  n_mfcc: 40
+  n_chroma: 12
+  n_fft: 2048
+  hop_length: 512
